@@ -30,7 +30,8 @@ setup(name='mortar-luigi',
       ],
       license='LICENSE.txt',
       install_requires=[
-          'luigi',
+          'luigi',          
+          'requests',
           'boto>=2.0',
           'mortar-api-python'
       ]
