@@ -33,8 +33,11 @@ class MortarProjectTask(luigi.Task):
     # default to a cluster of size 2
     cluster_size = luigi.IntParameter(default=2)
     
-    # default to a single-job cluster
-    cluster_type = luigi.Parameter(default=clusters.CLUSTER_TYPE_SINGLE_JOB)
+    # whether to run this job on it's own cluster
+    # or to use a multi-job cluster
+    # if a large enough cluster is running, it will be used,
+    # otherwise, a new multi-use cluster will be started
+    run_on_single_use_cluster = luigi.BooleanParameter(False)
     
     # run on master by default
     git_ref = luigi.Parameter(default='master')
@@ -76,7 +79,6 @@ class MortarProjectTask(luigi.Task):
         """
         Run the mortar job.
         """
-        # TODO: parameterize new cluster vs existing cluster
         api = self._get_api()
         job_id = self._run_job(api)
         
@@ -92,11 +94,36 @@ class MortarProjectTask(luigi.Task):
                    luigi.configuration.get_config().get('mortar', 'api_key'))
 
     def _run_job(self, api):
-        job_id = jobs.post_job_new_cluster(api, self.project(), self.script(), self.cluster_size, 
-            cluster_type=self.cluster_type, git_ref=self.git_ref, parameters=self.parameters(),
-            notify_on_job_finish=self.notify_on_job_finish, is_control_script=self.is_control_script())
+        cluster_type = clusters.CLUSTER_TYPE_SINGLE_JOB if self.run_on_single_use_cluster \
+            else clusters.CLUSTER_TYPE_PERSISTENT
+        cluster_id = None
+        if not self.run_on_single_use_cluster:
+            # search for a suitable cluster
+            idle_clusters = self._get_idle_clusters(api, min_size=self.cluster_size)
+            if idle_clusters:
+                # grab the idle largest cluster that's big enough to use
+                largest_cluster = sorted(idle_clusters, key=lambda c: int(c['size']), reverse=True)[0]
+                logger.info('Using largest running idle cluster with cluster_id [%s], size [%s]' % \
+                    (largest_cluster['cluster_id'], largest_cluster['size']))
+                cluster_id = largest_cluster['cluster_id']
+        
+        if cluster_id:
+            job_id = jobs.post_job_existing_cluster(api, self.project(), self.script(), cluster_id,
+                git_ref=self.git_ref, parameters=self.parameters(),
+                notify_on_job_finish=self.notify_on_job_finish, is_control_script=self.is_control_script())
+        else:
+            job_id = jobs.post_job_new_cluster(api, self.project(), self.script(), self.cluster_size, 
+                cluster_type=cluster_type, git_ref=self.git_ref, parameters=self.parameters(),
+                notify_on_job_finish=self.notify_on_job_finish, is_control_script=self.is_control_script())
         logger.info('Submitted new job to mortar with job_id [%s]' % job_id)
         return job_id
+        
+    def _get_idle_clusters(self, api, min_size=0):
+        return [cluster for cluster in clusters.get_clusters(api)['clusters'] \
+            if (cluster.get('status_code') == clusters.CLUSTER_STATUS_RUNNING) and \
+               (cluster.get('cluster_type_code') != clusters.CLUSTER_TYPE_SINGLE_JOB) and \
+               (len(cluster.get('running_jobs')) == 0) and \
+               (int(cluster.get('size')) >= min_size)]
     
     def _poll_job_completion(self, api, job_id):
         
