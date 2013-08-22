@@ -40,8 +40,8 @@ class DynamoDBClient(object):
             aws_secret_access_key = configuration.get_config().get('dynamodb', 'aws_secret_access_key')
         self.dynamo_cx = boto.dynamodb2.connect_to_region(
              region,
-             aws_access_key_id,
-             aws_secret_access_key,
+             aws_access_key_id=aws_access_key_id,
+             aws_secret_access_key=aws_secret_access_key,
              is_secure=True)
 
     def create_table(self, table_name, schema, throughput):
@@ -53,6 +53,8 @@ class DynamoDBClient(object):
             throughput=throughput,
             connection=self.dynamo_cx
         )
+        logger.info('Created new dynamodb table %s with schema %s' % \
+            (table_name, schema))
         return self._poll_until_table_active(table)
     
     def get_table(self, table_name):
