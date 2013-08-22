@@ -25,6 +25,9 @@ from mortar.api.v2 import jobs
 import logging
 logger = logging.getLogger('luigi-interface')
 
+NUM_MAP_SLOTS_PER_MACHINE = 8
+NUM_REDUCE_SLOTS_PER_MACHINE = 3
+
 class MortarProjectTask(luigi.Task):
     
     # default to a cluster of size 2
