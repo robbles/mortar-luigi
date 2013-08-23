@@ -3,10 +3,14 @@ import datetime
 import json
 
 import luigi
+from luigi import configuration
 from luigi.s3 import S3Target, S3PathTask
 
 from mortar.luigi.dynamodb import DynamoDBClient, HashKey, RangeKey, NUMBER, STRING
 from mortar.luigi import mortartask
+
+import requests
+from requests.auth import HTTPBasicAuth
 
 import logging
 logger = logging.getLogger('luigi-interface')
