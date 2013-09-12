@@ -33,7 +33,7 @@ def table_name(client_id, client_name, table_type, data_date):
 def ii_table(client_id, client_name, data_date):
     return table_name(client_id, client_name, 'ii', data_date)
 
-def ui_table(data_date):
+def ui_table(client_id, client_name, data_date):
     return table_name(client_id, client_name, 'ui', data_date)
 
 def write_s3_token_file_out(out_file):
@@ -178,20 +178,39 @@ class SanityTestDynamoDBTable(RecsysTask):
         path = '%s-%s' % (self.output_path(self.__class__.__name__), self.table_name())
         return [S3Target(path)]
 
+    def ids(self):
+        return RuntimeError("Must provide list of ids to sanity test")
+
     def run(self):
         dynamodb_client = DynamoDBClient()
         table = dynamodb_client.get_table(self.table_name())
 
         # do a quick sanity check
         limit = 100
-        results = [r for r in table.scan(limit=limit, to_id__null=False)]
+        results = [r for r in table.scan(limit=limit, to_id__null=False, score__null=False)]
         num_results = len(results)
         if num_results < limit:
-            raise RecsysException('Sanity check failed: only found %s / %s expected results in table %s with a to_id field' % \
+            raise RecsysException('Sanity check failed: only found %s / %s expected results in table %s with a to_id & score field' % \
                 (num_results, limit, table_name))
+
+        # do a check on specific ids
+        self._sanity_check_ids(table)
 
         # write an output token to S3 to confirm that we finished
         self.write_s3_token_file(self.output()[0])
+
+    def _sanity_check_ids(self, table):
+        failure_count = 0
+        for from_id in self.ids():
+            print 'Sanity Check: %s' % from_id
+            results = table.query(
+                from_id__eq=from_id, limit=5, reverse=True)
+            if len(list(results)) < 5:
+                failure_count += 1
+        if failure_count > 2:
+            raise RecsysException('Sanity check failed: %s ids in table %s failed to return sufficient results' % \
+                (failure_count, table_name))
+
 
 class PromoteDynamoDBTablesToAPI(RecsysTask):
     
@@ -218,7 +237,6 @@ class PromoteDynamoDBTablesToAPI(RecsysTask):
         return '%s/v1/clients/%s' % (self.recsys_api_host, self.client_id)
     
     def _set_tables(self):
-        tables = self.table_names()
         headers = {'Accept': 'application/json',
                    'Accept-Encoding': 'gzip',
                    'Content-Type': 'application/json',
@@ -231,3 +249,69 @@ class PromoteDynamoDBTablesToAPI(RecsysTask):
         logger.info('Setting new tables to %s at %s' % (body, url))
         response = requests.put(url, data=json.dumps(body), auth=auth, headers=headers)
         response.raise_for_status()
+
+
+class VerifyApi(RecsysTask):
+
+    def output(self):
+        return [S3Target(self.output_path(self.__class__.__name__))]
+
+    def headers(self):
+        return {'Accept': 'application/json',
+                   'Accept-Encoding': 'gzip',
+                   'Content-Type': 'application/json',
+                   'User-Agent': 'mortar-luigi'}
+
+    def auth(self):
+        return HTTPBasicAuth(configuration.get_config().get('recsys', 'email'),
+                             configuration.get_config().get('recsys', 'password'))
+
+    def run(self):
+        self._verify_api()
+
+        # write an output token to S3 to confirm that we finished
+        self.write_s3_token_file(self.output()[0])
+
+    def _verify_endpoint(self, endpoint_func, ids):
+        num_empty = 0
+        for item_id in ids:
+            endpoint = endpoint_func(item_id)
+            response = requests.get(endpoint, auth=self.auth(), headers=self.headers())
+            response.raise_for_status()
+            if len(response.json()['recommended_items']) < 5:
+                num_empty += 1
+        if num_empty > 2:
+            raise RecsysException('API verification failed: %s items had insufficient endpoint results' % num_empty)
+
+
+class VerifyItemItemApi(VerifyApi):
+
+    # host for recsys API
+    recsys_api_host = luigi.Parameter()
+
+    def item_ids(self):
+        return RuntimeError("Must provide list of ids to sanity verify")
+
+    def _item_endpoint(self, item_id):
+        return '%s/v1/recommend/items/%s' % (self.recsys_api_host, item_id)
+
+    def _multisources_endpoint(self, item_id):
+        return '%s/v1/recommend/multisources?item_id=%s' % (self.recsys_api_host, item_id)
+
+    def _verify_api(self):
+        self._verify_endpoint(self._item_endpoint, self.item_ids())
+        self._verify_endpoint(self._multisources_endpoint, self.item_ids())
+
+class VerifyUserItemApi(VerifyApi):
+
+    # host for recsys API
+    recsys_api_host = luigi.Parameter()
+
+    def user_ids(self):
+        return RuntimeError("Must provide list of ids to sanity verify")
+
+    def _user_endpoint(self):
+        return '%s/v1/recommend/users/%s' % (self.recsys_api_host, self.user_id())
+
+    def _verify_api(self):
+         self._verify_endpoint(self._user_endpoint, self.user_ids())
