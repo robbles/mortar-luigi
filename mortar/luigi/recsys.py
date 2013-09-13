@@ -15,8 +15,11 @@ from requests.auth import HTTPBasicAuth
 import logging
 logger = logging.getLogger('luigi-interface')
 
-def get_input_path(input_bucket, data_date, filename=None):
-    path = 's3://%s/input/%s' % (input_bucket, data_date)
+def get_input_path(input_bucket, data_date, filename=None, incremental=False):
+    if incremental:
+        path = 's3://%s/input' % input_bucket
+    else:
+        path = 's3://%s/input/%s' % (input_bucket, data_date)
     if filename:
         path += ('/%s' % filename)
     return path
@@ -63,8 +66,11 @@ class RecsysTask(luigi.Task):
     # date of data to process
     data_date = luigi.DateParameter()
 
+    # whether the data upload is incremental
+    incremental = luigi.Parameter(False)
+
     def input_path(self, filename=None):
-        return get_input_path(self.input_bucket, self.data_date, filename)
+        return get_input_path(self.input_bucket, self.data_date, filename=filename, incremental=self.incremental)
 
     def output_path(self, filename=None):
        return get_output_path(self.output_bucket, self.data_date, filename)
@@ -95,9 +101,12 @@ class RecsysMortarProjectPigscriptTask(mortartask.MortarProjectPigscriptTask):
     
     # date of data to process
     data_date = luigi.DateParameter()
-    
+
+    # whether the data upload is incremental
+    incremental = luigi.Parameter(False)
+
     def input_path(self, filename=None):
-        return get_input_path(self.input_bucket, self.data_date, filename)
+        return get_input_path(self.input_bucket, self.data_date, filename=filename, incremental=self.incremental)
 
     def output_path(self, filename=None):
        return get_output_path(self.output_bucket, self.data_date, filename)
