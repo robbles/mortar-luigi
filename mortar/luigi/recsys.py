@@ -167,6 +167,8 @@ class UpdateDynamoDBThroughput(RecsysTask):
 
 class SanityTestDynamoDBTable(RecsysTask):
 
+    rec_length = luigi.IntParameter(5)
+
     @abc.abstractmethod
     def table_name(self):
         """
@@ -178,6 +180,7 @@ class SanityTestDynamoDBTable(RecsysTask):
         path = '%s-%s' % (self.output_path(self.__class__.__name__), self.table_name())
         return [S3Target(path)]
 
+    @abc.abstractmethod
     def ids(self):
         return RuntimeError("Must provide list of ids to sanity test")
 
@@ -202,11 +205,11 @@ class SanityTestDynamoDBTable(RecsysTask):
     def _sanity_check_ids(self, table):
         failure_count = 0
         for from_id in self.ids():
-            print 'Sanity Check: %s' % from_id
             results = table.query(
-                from_id__eq=from_id, limit=5, reverse=True)
-            if len(list(results)) < 5:
+                from_id__eq=from_id, limit=self.rec_length, reverse=True)
+            if len(list(results)) < self.rec_length:
                 failure_count += 1
+                logger.info('Id %s only returned %s results.' % (from_id, len(list(results))))
         if failure_count > 2:
             raise RecsysException('Sanity check failed: %s ids in table %s failed to return sufficient results' % \
                 (failure_count, table_name))
@@ -253,6 +256,8 @@ class PromoteDynamoDBTablesToAPI(RecsysTask):
 
 class VerifyApi(RecsysTask):
 
+    rec_length = luigi.IntParameter(5)
+
     def output(self):
         return [S3Target(self.output_path(self.__class__.__name__))]
 
@@ -272,14 +277,19 @@ class VerifyApi(RecsysTask):
         # write an output token to S3 to confirm that we finished
         self.write_s3_token_file(self.output()[0])
 
+    @abc.abstractmethod
+    def _verify_api(self):
+        raise RuntimeError("Must implement _verify_api!")
+
     def _verify_endpoint(self, endpoint_func, ids):
         num_empty = 0
         for item_id in ids:
             endpoint = endpoint_func(item_id)
             response = requests.get(endpoint, auth=self.auth(), headers=self.headers())
             response.raise_for_status()
-            if len(response.json()['recommended_items']) < 5:
+            if len(response.json()['recommended_items']) < self.rec_length:
                 num_empty += 1
+                logger.info('Id %s only returned %s results.' % (item_id, len(response.json()['recommended_items'])))
         if num_empty > 2:
             raise RecsysException('API verification failed: %s items had insufficient endpoint results' % num_empty)
 
@@ -289,6 +299,7 @@ class VerifyItemItemApi(VerifyApi):
     # host for recsys API
     recsys_api_host = luigi.Parameter()
 
+    @abc.abstractmethod
     def item_ids(self):
         return RuntimeError("Must provide list of ids to sanity verify")
 
@@ -307,6 +318,7 @@ class VerifyUserItemApi(VerifyApi):
     # host for recsys API
     recsys_api_host = luigi.Parameter()
 
+    @abc.abstractmethod
     def user_ids(self):
         return RuntimeError("Must provide list of ids to sanity verify")
 
