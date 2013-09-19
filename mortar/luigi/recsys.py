@@ -331,8 +331,8 @@ class VerifyUserItemApi(VerifyApi):
     def user_ids(self):
         return RuntimeError("Must provide list of ids to sanity verify")
 
-    def _user_endpoint(self):
-        return '%s/v1/recommend/users/%s' % (self.recsys_api_host, self.user_id())
+    def _user_endpoint(self, user_id):
+        return '%s/v1/recommend/users/%s' % (self.recsys_api_host, user_id)
 
     def _verify_api(self):
          self._verify_endpoint(self._user_endpoint, self.user_ids())
