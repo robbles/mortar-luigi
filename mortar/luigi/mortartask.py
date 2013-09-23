@@ -22,6 +22,8 @@ from mortar.api.v2 import clusters
 from mortar.api.v2 import jobs
 
 import logging
+from mortar.luigi import target_factory
+
 logger = logging.getLogger('luigi-interface')
 
 NUM_MAP_SLOTS_PER_MACHINE = 8
@@ -77,21 +79,34 @@ class MortarProjectTask(luigi.Task):
     def output(self):
         return [self.success_token()]
 
+    def token_path(self):
+        # want this to "just work" out of the box, b/c this is complex
+        # to explain and add to every class I implement, and not everyone
+        # will understand how to implement a parent class in the middle, but
+        # rather will just do pattern-matching on our examples.
+
+        # returning a file will make this work out of the box locally; though
+        # it won't be robust against running on different machines.  I think
+        # the tradeoff is worth it so that new people can easily write code on our
+        # platform once this is a public inteface.
+        #
+        # Also, we can update this code to use S3 once we have the ability
+        # to pull S3 keys from config automatically
+
+        # note: needs to be a stable location on the disk, so we use /tmp
+        # instead of tempdir.gettempdir()
+        return "file:///tmp"
+
     @abc.abstractmethod
-    def mortar_run_output(self):
+    def script_output(self):
 
-        raise RuntimeError("Must implement mortar_run_output!")
-
-    @abc.abstractmethod
-    def _create_s3_output_target(self, file_name):
-
-        raise RuntimeError("Must implement __create_s3_output_target!")
+        raise RuntimeError("Must implement script_output!")
 
     def running_token(self):
-        return self._create_s3_output_target('%s-%s' % (self.__class__.__name__, 'Running'))
+        return target_factory.get_target('%s/%s-%s' % (self.token_path(), self.__class__.__name__, 'Running'))
 
     def success_token(self):
-        return self._create_s3_output_target(self.__class__.__name__)
+        return target_factory.get_target('%s/%s' % (self.token_path(), self.__class__.__name__))
 
     def run(self):
         """
@@ -104,7 +119,7 @@ class MortarProjectTask(luigi.Task):
         final_job_status_code = job.get('status_code')
         self.running_token().remove()
         if final_job_status_code != jobs.STATUS_SUCCESS:
-            for out in self.mortar_run_output():
+            for out in self.script_output():
                 out.remove()
             raise Exception('Mortar job_id [%s] failed with status_code: [%s], error details: %s' % (job_id, final_job_status_code, job.get('error')))
         else:

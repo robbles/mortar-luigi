@@ -113,6 +113,9 @@ class RecsysMortarProjectPigscriptTask(mortartask.MortarProjectPigscriptTask):
     def output_path(self, filename=None):
         return get_output_path(self.output_bucket, self.data_date, filename)
 
+    def token_path(self):
+        return self.output_path()
+
     def ii_table_name(self):
         return ii_table(self.client_id, self.client_name, self.data_date)
 
@@ -121,9 +124,6 @@ class RecsysMortarProjectPigscriptTask(mortartask.MortarProjectPigscriptTask):
 
     def write_s3_token_file(self, out_file, text=None):
         write_s3_token_file_out(out_file, text=text)
-
-    def _create_s3_output_target(self, file_name):
-        return S3Target(self.output_path(file_name))
 
 class CreateDynamoDBTable(RecsysTask):
     """
