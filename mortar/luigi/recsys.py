@@ -39,8 +39,10 @@ def ii_table(client_id, client_name, data_date):
 def ui_table(client_id, client_name, data_date):
     return table_name(client_id, client_name, 'ui', data_date)
 
-def write_s3_token_file_out(out_file):
+def write_s3_token_file_out(out_file, text=None):
     with out_file.open('w') as token_file:
+        if text:
+            token_file.write('%s\n' % text)
         token_file.write('%s' % datetime.datetime.utcnow().isoformat())
 
 class RecsysException(Exception):
@@ -83,8 +85,8 @@ class RecsysTask(luigi.Task):
        
     def write_s3_token_file(self, out_file):
         write_s3_token_file_out(out_file)
-    
-    
+
+
 class RecsysMortarProjectPigscriptTask(mortartask.MortarProjectPigscriptTask):
     """
     Task that runs a recsys pigscript on Mortar.
@@ -109,16 +111,19 @@ class RecsysMortarProjectPigscriptTask(mortartask.MortarProjectPigscriptTask):
         return get_input_path(self.input_bucket, self.data_date, filename=filename, incremental=self.incremental)
 
     def output_path(self, filename=None):
-       return get_output_path(self.output_bucket, self.data_date, filename)
+        return get_output_path(self.output_bucket, self.data_date, filename)
 
     def ii_table_name(self):
-       return ii_table(self.client_id, self.client_name, self.data_date)
+        return ii_table(self.client_id, self.client_name, self.data_date)
 
     def ui_table_name(self):
-       return ui_table(self.client_id, self.client_name, self.data_date)
+        return ui_table(self.client_id, self.client_name, self.data_date)
 
-    def write_s3_token_file(self, out_file):
-       write_s3_token_file_out(out_file)
+    def write_s3_token_file(self, out_file, text=None):
+        write_s3_token_file_out(out_file, text=text)
+
+    def _create_s3_output_target(self, file_name):
+        return S3Target(self.output_path(file_name))
 
 class CreateDynamoDBTable(RecsysTask):
     """

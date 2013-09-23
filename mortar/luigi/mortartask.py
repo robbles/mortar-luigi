@@ -12,11 +12,10 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 import abc
-
 import time
 
 import luigi
-import luigi.configuration
+from luigi.s3 import S3Target, S3PathTask
 
 from mortar.api.v2 import API
 from mortar.api.v2 import clusters
@@ -75,6 +74,25 @@ class MortarProjectTask(luigi.Task):
         """
         return {}
 
+    def output(self):
+        return [self.success_token()]
+
+    @abc.abstractmethod
+    def mortar_run_output(self):
+
+        raise RuntimeError("Must implement mortar_run_output!")
+
+    @abc.abstractmethod
+    def _create_s3_output_target(self, file_name):
+
+        raise RuntimeError("Must implement __create_s3_output_target!")
+
+    def running_token(self):
+        return self._create_s3_output_target('%s-%s' % (self.__class__.__name__, 'Running'))
+
+    def success_token(self):
+        return self._create_s3_output_target(self.__class__.__name__)
+
     def run(self):
         """
         Run the mortar job.
@@ -84,9 +102,13 @@ class MortarProjectTask(luigi.Task):
         
         job = self._poll_job_completion(api, job_id)
         final_job_status_code = job.get('status_code')
+        self.running_token().remove()
         if final_job_status_code != jobs.STATUS_SUCCESS:
+            for out in self.mortar_run_output():
+                out.remove()
             raise Exception('Mortar job_id [%s] failed with status_code: [%s], error details: %s' % (job_id, final_job_status_code, job.get('error')))
         else:
+            self.write_s3_token_file(self.success_token())
             logger.info('Mortar job_id [%s] completed successfully' % job_id)
 
     def _get_api(self):
@@ -94,6 +116,7 @@ class MortarProjectTask(luigi.Task):
                    luigi.configuration.get_config().get('mortar', 'api_key'))
 
     def _run_job(self, api):
+        ## TODO: check for run Id
         cluster_type = clusters.CLUSTER_TYPE_SINGLE_JOB if self.run_on_single_use_cluster \
             else clusters.CLUSTER_TYPE_PERSISTENT
         cluster_id = None
@@ -115,6 +138,7 @@ class MortarProjectTask(luigi.Task):
             job_id = jobs.post_job_new_cluster(api, self.project(), self.script(), self.cluster_size, 
                 cluster_type=cluster_type, git_ref=self.git_ref, parameters=self.parameters(),
                 notify_on_job_finish=self.notify_on_job_finish, is_control_script=self.is_control_script())
+            self.write_s3_token_file(self.running_token(), text=job_id)
         logger.info('Submitted new job to mortar with job_id [%s]' % job_id)
         return job_id
         
@@ -148,6 +172,7 @@ class MortarProjectTask(luigi.Task):
 
             # final state
             if current_job_status in jobs.COMPLETE_STATUSES:
+                self.running_token().remove()
                 return job
             else:
                 # sleep and continue polling
