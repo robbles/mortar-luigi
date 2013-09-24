@@ -4,10 +4,10 @@ import json
 
 import luigi
 from luigi import configuration
-from luigi.s3 import S3Target, S3PathTask
+from luigi.s3 import S3Target
 
 from mortar.luigi.dynamodb import DynamoDBClient, HashKey, RangeKey, NUMBER, STRING
-from mortar.luigi import mortartask
+from mortar.luigi import mortartask, target_factory
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -38,12 +38,6 @@ def ii_table(client_id, client_name, data_date):
 
 def ui_table(client_id, client_name, data_date):
     return table_name(client_id, client_name, 'ui', data_date)
-
-def write_s3_token_file_out(out_file, text=None):
-    with out_file.open('w') as token_file:
-        if text:
-            token_file.write('%s\n' % text)
-        token_file.write('%s' % datetime.datetime.utcnow().isoformat())
 
 class RecsysException(Exception):
     pass
@@ -84,7 +78,7 @@ class RecsysTask(luigi.Task):
        return ui_table(self.client_id, self.client_name, self.data_date)
        
     def write_s3_token_file(self, out_file):
-        write_s3_token_file_out(out_file)
+        target_factory.write_file(out_file)
 
 
 class RecsysMortarProjectPigscriptTask(mortartask.MortarProjectPigscriptTask):
@@ -122,8 +116,8 @@ class RecsysMortarProjectPigscriptTask(mortartask.MortarProjectPigscriptTask):
     def ui_table_name(self):
         return ui_table(self.client_id, self.client_name, self.data_date)
 
-    def write_s3_token_file(self, out_file, text=None):
-        write_s3_token_file_out(out_file, text=text)
+    def write_s3_token_file(self, out_file):
+        target_factory.write_file(out_file)
 
 class CreateDynamoDBTable(RecsysTask):
     """

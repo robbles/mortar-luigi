@@ -15,7 +15,6 @@ import abc
 import time
 
 import luigi
-from luigi.s3 import S3Target, S3PathTask
 
 from mortar.api.v2 import API
 from mortar.api.v2 import clusters
@@ -28,6 +27,8 @@ logger = logging.getLogger('luigi-interface')
 
 NUM_MAP_SLOTS_PER_MACHINE = 8
 NUM_REDUCE_SLOTS_PER_MACHINE = 3
+
+
 
 class MortarProjectTask(luigi.Task):
     
@@ -80,26 +81,14 @@ class MortarProjectTask(luigi.Task):
         return [self.success_token()]
 
     def token_path(self):
-        # want this to "just work" out of the box, b/c this is complex
-        # to explain and add to every class I implement, and not everyone
-        # will understand how to implement a parent class in the middle, but
-        # rather will just do pattern-matching on our examples.
-
-        # returning a file will make this work out of the box locally; though
-        # it won't be robust against running on different machines.  I think
-        # the tradeoff is worth it so that new people can easily write code on our
-        # platform once this is a public inteface.
-        #
-        # Also, we can update this code to use S3 once we have the ability
-        # to pull S3 keys from config automatically
-
-        # note: needs to be a stable location on the disk, so we use /tmp
-        # instead of tempdir.gettempdir()
+        # override with S3 path for usage across machines or on clusters
         return "file:///tmp"
 
     @abc.abstractmethod
     def script_output(self):
-
+        """
+        List of targets for output of running Pigscript
+        """
         raise RuntimeError("Must implement script_output!")
 
     def running_token(self):
@@ -114,16 +103,17 @@ class MortarProjectTask(luigi.Task):
         """
         api = self._get_api()
         job_id = self._run_job(api)
-        
+        target_factory.write_file(self.running_token(), text=job_id)
         job = self._poll_job_completion(api, job_id)
         final_job_status_code = job.get('status_code')
         self.running_token().remove()
         if final_job_status_code != jobs.STATUS_SUCCESS:
             for out in self.script_output():
+                logger.info('Mortar script failed: removing incomplete data in %s' % out)
                 out.remove()
             raise Exception('Mortar job_id [%s] failed with status_code: [%s], error details: %s' % (job_id, final_job_status_code, job.get('error')))
         else:
-            self.write_s3_token_file(self.success_token())
+            target_factory.write_file(self.success_token())
             logger.info('Mortar job_id [%s] completed successfully' % job_id)
 
     def _get_api(self):
@@ -131,7 +121,7 @@ class MortarProjectTask(luigi.Task):
                    luigi.configuration.get_config().get('mortar', 'api_key'))
 
     def _run_job(self, api):
-        ## TODO: check for run Id
+        ## TODO: check for existence of job_id
         cluster_type = clusters.CLUSTER_TYPE_SINGLE_JOB if self.run_on_single_use_cluster \
             else clusters.CLUSTER_TYPE_PERSISTENT
         cluster_id = None
@@ -153,7 +143,6 @@ class MortarProjectTask(luigi.Task):
             job_id = jobs.post_job_new_cluster(api, self.project(), self.script(), self.cluster_size, 
                 cluster_type=cluster_type, git_ref=self.git_ref, parameters=self.parameters(),
                 notify_on_job_finish=self.notify_on_job_finish, is_control_script=self.is_control_script())
-            self.write_s3_token_file(self.running_token(), text=job_id)
         logger.info('Submitted new job to mortar with job_id [%s]' % job_id)
         return job_id
         
@@ -187,7 +176,6 @@ class MortarProjectTask(luigi.Task):
 
             # final state
             if current_job_status in jobs.COMPLETE_STATUSES:
-                self.running_token().remove()
                 return job
             else:
                 # sleep and continue polling

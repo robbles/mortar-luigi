@@ -11,10 +11,11 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations under
 # the License.
+import datetime
 from luigi.s3 import S3Target
 from luigi.target import FileSystemTarget
 
-
+# TODO: move into luigi
 def get_target(path):
     """
     Factory method for creating a target from a path.
@@ -24,4 +25,12 @@ def get_target(path):
     elif path.startswith('file:'):
         return FileSystemTarget(path)
     else:
-        raise RuntimeError("Unknown target path type: %s" % path)
+        raise RuntimeError("Unknown scheme for path: %s" % path)
+
+
+def write_file(out_target, text=None):
+    with out_target.open('w') as token_file:
+        if text:
+            token_file.write('%s\n' % text)
+        else:
+            token_file.write('%s' % datetime.datetime.utcnow().isoformat())
