@@ -12,21 +12,23 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 import abc
-
 import time
 
 import luigi
-import luigi.configuration
 
 from mortar.api.v2 import API
 from mortar.api.v2 import clusters
 from mortar.api.v2 import jobs
 
 import logging
+from mortar.luigi import target_factory
+
 logger = logging.getLogger('luigi-interface')
 
 NUM_MAP_SLOTS_PER_MACHINE = 8
 NUM_REDUCE_SLOTS_PER_MACHINE = 3
+
+
 
 class MortarProjectTask(luigi.Task):
     
@@ -75,18 +77,43 @@ class MortarProjectTask(luigi.Task):
         """
         return {}
 
+    def output(self):
+        return [self.success_token()]
+
+    def token_path(self):
+        # override with S3 path for usage across machines or on clusters
+        return "file:///tmp"
+
+    @abc.abstractmethod
+    def script_output(self):
+        """
+        List of targets for output of running Pigscript
+        """
+        raise RuntimeError("Must implement script_output!")
+
+    def running_token(self):
+        return target_factory.get_target('%s/%s-%s' % (self.token_path(), self.__class__.__name__, 'Running'))
+
+    def success_token(self):
+        return target_factory.get_target('%s/%s' % (self.token_path(), self.__class__.__name__))
+
     def run(self):
         """
         Run the mortar job.
         """
         api = self._get_api()
         job_id = self._run_job(api)
-        
+        target_factory.write_file(self.running_token(), text=job_id)
         job = self._poll_job_completion(api, job_id)
         final_job_status_code = job.get('status_code')
+        self.running_token().remove()
         if final_job_status_code != jobs.STATUS_SUCCESS:
+            for out in self.script_output():
+                logger.info('Mortar script failed: removing incomplete data in %s' % out)
+                out.remove()
             raise Exception('Mortar job_id [%s] failed with status_code: [%s], error details: %s' % (job_id, final_job_status_code, job.get('error')))
         else:
+            target_factory.write_file(self.success_token())
             logger.info('Mortar job_id [%s] completed successfully' % job_id)
 
     def _get_api(self):
@@ -94,6 +121,7 @@ class MortarProjectTask(luigi.Task):
                    luigi.configuration.get_config().get('mortar', 'api_key'))
 
     def _run_job(self, api):
+        ## TODO: check for existence of job_id
         cluster_type = clusters.CLUSTER_TYPE_SINGLE_JOB if self.run_on_single_use_cluster \
             else clusters.CLUSTER_TYPE_PERSISTENT
         cluster_id = None

@@ -4,10 +4,10 @@ import json
 
 import luigi
 from luigi import configuration
-from luigi.s3 import S3Target, S3PathTask
+from luigi.s3 import S3Target
 
 from mortar.luigi.dynamodb import DynamoDBClient, HashKey, RangeKey, NUMBER, STRING
-from mortar.luigi import mortartask
+from mortar.luigi import mortartask, target_factory
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -38,10 +38,6 @@ def ii_table(client_id, client_name, data_date):
 
 def ui_table(client_id, client_name, data_date):
     return table_name(client_id, client_name, 'ui', data_date)
-
-def write_s3_token_file_out(out_file):
-    with out_file.open('w') as token_file:
-        token_file.write('%s' % datetime.datetime.utcnow().isoformat())
 
 class RecsysException(Exception):
     pass
@@ -82,9 +78,9 @@ class RecsysTask(luigi.Task):
        return ui_table(self.client_id, self.client_name, self.data_date)
        
     def write_s3_token_file(self, out_file):
-        write_s3_token_file_out(out_file)
-    
-    
+        target_factory.write_file(out_file)
+
+
 class RecsysMortarProjectPigscriptTask(mortartask.MortarProjectPigscriptTask):
     """
     Task that runs a recsys pigscript on Mortar.
@@ -109,16 +105,19 @@ class RecsysMortarProjectPigscriptTask(mortartask.MortarProjectPigscriptTask):
         return get_input_path(self.input_bucket, self.data_date, filename=filename, incremental=self.incremental)
 
     def output_path(self, filename=None):
-       return get_output_path(self.output_bucket, self.data_date, filename)
+        return get_output_path(self.output_bucket, self.data_date, filename)
+
+    def token_path(self):
+        return self.output_path()
 
     def ii_table_name(self):
-       return ii_table(self.client_id, self.client_name, self.data_date)
+        return ii_table(self.client_id, self.client_name, self.data_date)
 
     def ui_table_name(self):
-       return ui_table(self.client_id, self.client_name, self.data_date)
+        return ui_table(self.client_id, self.client_name, self.data_date)
 
     def write_s3_token_file(self, out_file):
-       write_s3_token_file_out(out_file)
+        target_factory.write_file(out_file)
 
 class CreateDynamoDBTable(RecsysTask):
     """
