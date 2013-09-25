@@ -1,6 +1,6 @@
 import abc
-import datetime
 import json
+from boto.dynamodb2.fields import AllIndex
 
 import luigi
 from luigi import configuration
@@ -125,13 +125,22 @@ class CreateDynamoDBTable(RecsysTask):
     """
     read_throughput = luigi.IntParameter(1)
     write_throughput = luigi.IntParameter(1000)
-    
+
     @abc.abstractmethod
     def table_name(self):
         """
         Name of the table to create.
         """
         raise RuntimeError("Must provide a table_name to create")
+
+    def _get_index(self):
+        return [AllIndex('FacetRankIndex', parts=[
+            HashKey('from_id', data_type=STRING),
+            RangeKey(self.get_facet_field(), data_type=STRING)
+        ])]
+
+    def get_facet_field(self):
+        return None
         
     def output(self):
         path = '%s-%s' % (self.output_path(self.__class__.__name__), self.table_name())
@@ -143,7 +152,10 @@ class CreateDynamoDBTable(RecsysTask):
                   RangeKey('rank', data_type=NUMBER)]
         throughput={'read': self.read_throughput,
                     'write': self.write_throughput}
-        table = dynamodb_client.create_table(self.table_name(), schema, throughput)
+        if self.get_facet_field():
+            dynamodb_client.create_table(self.table_name(), schema, throughput, indexes=self._get_index())
+        else:
+            dynamodb_client.create_table(self.table_name(), schema, throughput)
 
         # write token to note completion
         self.write_s3_token_file(self.output()[0])

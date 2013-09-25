@@ -44,14 +44,15 @@ class DynamoDBClient(object):
              aws_secret_access_key=aws_secret_access_key,
              is_secure=True)
 
-    def create_table(self, table_name, schema, throughput):
+    def create_table(self, table_name, schema, throughput, indexes=None):
         """
         Create a new dynamoDB table and block until it is ready to use.
         """
         table = Table.create(table_name,
             schema=schema,
             throughput=throughput,
-            connection=self.dynamo_cx
+            connection=self.dynamo_cx,
+            indexes=indexes
         )
         logger.info('Created new dynamodb table %s with schema %s' % \
             (table_name, schema))
