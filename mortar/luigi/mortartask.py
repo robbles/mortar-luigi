@@ -103,7 +103,7 @@ class MortarProjectTask(luigi.Task):
         """
         api = self._get_api()
         if self.running_token().exists():
-            job_id = self.running_token().read().strip()
+            job_id = self.running_token().open().read().strip()
         else:
             job_id = self._run_job(api)
             target_factory.write_file(self.running_token(), text=job_id)
