@@ -168,8 +168,7 @@ class MortarProjectTask(luigi.Task):
                 job = jobs.get_job(api, job_id)
                 new_job_status = job.get('status_code')
 
-                # reset exceptions on successful poll
-                exception_count = 0
+
 
                 # check for updated status
                 if new_job_status != current_job_status:
@@ -186,12 +185,15 @@ class MortarProjectTask(luigi.Task):
                 if current_job_status in jobs.COMPLETE_STATUSES:
                     return job
                 else:
+                    # reset exception count on successful loop
+                    exception_count = 0
+
                     # sleep and continue polling
                     time.sleep(self.job_polling_interval)
-            except Exception:
+            except Exception, e:
                 if exception_count < self.num_polling_retries:
                     exception_count += 1
-                    logger.info('Failure to get job status for job %s' % job_id)
+                    logger.info('Failure to get job status for job %s: %s' % (job_id, str(e)))
                     time.sleep(self.job_polling_interval)
                 else:
                     raise
