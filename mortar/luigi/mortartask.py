@@ -28,9 +28,13 @@ logger = logging.getLogger('luigi-interface')
 NUM_MAP_SLOTS_PER_MACHINE = 8
 NUM_REDUCE_SLOTS_PER_MACHINE = 3
 
+class MortarTask(luigi.Task):
 
+     def _get_api(self):
+        return API(luigi.configuration.get_config().get('mortar', 'email'),
+                   luigi.configuration.get_config().get('mortar', 'api_key'))
 
-class MortarProjectTask(luigi.Task):
+class MortarProjectTask(MortarTask):
     
     # default to a cluster of size 2
     cluster_size = luigi.IntParameter(default=2)
@@ -116,9 +120,6 @@ class MortarProjectTask(luigi.Task):
             target_factory.write_file(self.success_token())
             logger.info('Mortar job_id [%s] completed successfully' % job_id)
 
-    def _get_api(self):
-        return API(luigi.configuration.get_config().get('mortar', 'email'),
-                   luigi.configuration.get_config().get('mortar', 'api_key'))
 
     def _run_job(self, api):
         ## TODO: check for existence of job_id
@@ -196,4 +197,16 @@ class MortarProjectControlscriptTask(MortarProjectTask):
 
     def is_control_script(self):
         return True
+class MortarClusterShutdownTask(MortarTask):
+
+    def _get_running_idle_clusters(self, api):
+        return [c for c in clusters.get_clusters(api).get('clusters') if not c.get('running_jobs')
+            and c.get('status_code') == clusters.CLUSTER_STATUS_RUNNING]
+
+    def run(self):
+        api = self._get_api()
+        active_clusters = self._get_running_idle_clusters(api)
+        for c in active_clusters:
+            clusters.stop_cluster(api, c.get('cluster_id'))
+
 
