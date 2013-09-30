@@ -109,8 +109,11 @@ class MortarProjectTask(MortarTask):
         Run the mortar job.
         """
         api = self._get_api()
-        job_id = self._run_job(api)
-        target_factory.write_file(self.running_token(), text=job_id)
+        if self.running_token().exists():
+            job_id = self.running_token().open().read().strip()
+        else:
+            job_id = self._run_job(api)
+            target_factory.write_file(self.running_token(), text=job_id)
         job = self._poll_job_completion(api, job_id)
         final_job_status_code = job.get('status_code')
         self.running_token().remove()
@@ -125,7 +128,6 @@ class MortarProjectTask(MortarTask):
 
 
     def _run_job(self, api):
-        ## TODO: check for existence of job_id
         cluster_type = clusters.CLUSTER_TYPE_SINGLE_JOB if self.run_on_single_use_cluster \
             else clusters.CLUSTER_TYPE_PERSISTENT
         cluster_id = None
