@@ -226,7 +226,7 @@ class MortarClusterShutdownTask(MortarTask):
         api = self._get_api()
         active_clusters = self._get_running_idle_clusters(api)
         for c in active_clusters:
-            logger.log('Stopping idle cluster %s' % c.get('cluster_id'))
+            logger.info('Stopping idle cluster %s' % c.get('cluster_id'))
             clusters.stop_cluster(api, c.get('cluster_id'))
 
 
