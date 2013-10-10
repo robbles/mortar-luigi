@@ -10,7 +10,6 @@
     cd ~/code
     git clone git@github.com:mortardata/luigi.git
     cd luigi
-    git checkout ddaniels_luigi_spike
     python setup.py develop
     
     # install mortar-api-python
