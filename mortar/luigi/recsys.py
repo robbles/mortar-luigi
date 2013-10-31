@@ -225,9 +225,11 @@ class SanityTestDynamoDBTable(RecsysTask):
         results = [r for r in table.scan(limit=limit, to_id__null=False, score__null=False)]
         num_results = len(results)
         if num_results < limit:
+            exception_string = 'Sanity check failed: only found %s / %s expected results in table %s with a to_id & score field' % \
+                    (num_results, limit, table_name)
+            logger.warn(exception_string)
             if not self.sample_test:
-                raise RecsysException('Sanity check failed: only found %s / %s expected results in table %s with a to_id & score field' % \
-                    (num_results, limit, table_name))
+                raise RecsysException(exception_string)
 
         # do a check on specific ids
         self._sanity_check_ids(table)
@@ -244,9 +246,11 @@ class SanityTestDynamoDBTable(RecsysTask):
                 failure_count += 1
                 logger.info('Id %s only returned %s results.' % (from_id, len(list(results))))
         if failure_count > 2:
+            exception_string = 'Sanity check failed: %s ids in table %s failed to return sufficient results' % \
+                    (failure_count, table_name)
+            logger.warn(exception_string)
             if not self.sample_test:
-                raise RecsysException('Sanity check failed: %s ids in table %s failed to return sufficient results' % \
-                    (failure_count, table_name))
+                raise RecsysException(exception_string)
 
 
 class PromoteDynamoDBTablesToAPI(RecsysTask):
@@ -324,8 +328,11 @@ class VerifyApi(RecsysTask):
             if len(response.json()['recommended_items']) < self.rec_length:
                 num_empty += 1
                 logger.info('Id %s only returned %s results.' % (item_id, len(response.json()['recommended_items'])))
-        if num_empty > 2 and not self.sample_test:
-            raise RecsysException('API verification failed: %s items had insufficient endpoint results' % num_empty)
+        if num_empty > 2:
+            exception_string = 'API verification failed: %s items had insufficient endpoint results' % num_empty
+            logger.warn(exception_string)
+            if not self.sample_test:
+                raise RecsysException(exception_string)
 
 
 class VerifyItemItemApi(VerifyApi):
