@@ -15,8 +15,10 @@ from requests.auth import HTTPBasicAuth
 import logging
 logger = logging.getLogger('luigi-interface')
 
-def get_input_path(input_bucket, data_date, filename=None, incremental=False):
-    if incremental:
+def get_input_path(input_bucket, data_date, filename=None, incremental=False, sample_test=False):
+    if sample_test:
+        path = 's3://%s/sample_data/input' % input_bucket
+    elif incremental:
         path = 's3://%s/input' % input_bucket
     else:
         path = 's3://%s/input/%s' % (input_bucket, data_date)
@@ -24,8 +26,11 @@ def get_input_path(input_bucket, data_date, filename=None, incremental=False):
         path += ('/%s' % filename)
     return path
 
-def get_output_path(output_bucket, data_date, filename=None):
-    path = 's3://%s/output/%s' % (output_bucket, data_date)
+def get_output_path(output_bucket, data_date, filename=None, sample_test=False):
+    if sample_test:
+        path = 's3://%s/sample_data/output/%s' % (output_bucket, data_date)
+    else:
+        path = 's3://%s/output/%s' % (output_bucket, data_date)
     if filename:
         path += ('/%s' % filename)
     return path
@@ -65,11 +70,15 @@ class RecsysTask(luigi.Task):
     # whether the data upload is incremental
     incremental = luigi.Parameter(False)
 
+    # whether this is a test run on sample data
+    # for is_global to be effective it must be set on the first task checked; most likely VerifyAPI
+    sample_test = luigi.BooleanParameter(False, is_global=True)
+
     def input_path(self, filename=None):
-        return get_input_path(self.input_bucket, self.data_date, filename=filename, incremental=self.incremental)
+        return get_input_path(self.input_bucket, self.data_date, filename=filename, incremental=self.incremental, sample_test=self.sample_test)
 
     def output_path(self, filename=None):
-       return get_output_path(self.output_bucket, self.data_date, filename)
+       return get_output_path(self.output_bucket, self.data_date, filename, sample_test=self.sample_test)
 
     def ii_table_name(self):
        return ii_table(self.client_id, self.client_name, self.data_date)
@@ -101,11 +110,14 @@ class RecsysMortarProjectPigscriptTask(mortartask.MortarProjectPigscriptTask):
     # whether the data upload is incremental
     incremental = luigi.Parameter(False)
 
+    # whether this is a test run on sample data
+    sample_test = luigi.BooleanParameter(False)
+
     def input_path(self, filename=None):
-        return get_input_path(self.input_bucket, self.data_date, filename=filename, incremental=self.incremental)
+        return get_input_path(self.input_bucket, self.data_date, filename=filename, incremental=self.incremental, sample_test=self.sample_test)
 
     def output_path(self, filename=None):
-        return get_output_path(self.output_bucket, self.data_date, filename)
+        return get_output_path(self.output_bucket, self.data_date, filename, sample_test=self.sample_test)
 
     def token_path(self):
         return self.output_path()
@@ -213,8 +225,11 @@ class SanityTestDynamoDBTable(RecsysTask):
         results = [r for r in table.scan(limit=limit, to_id__null=False, score__null=False)]
         num_results = len(results)
         if num_results < limit:
-            raise RecsysException('Sanity check failed: only found %s / %s expected results in table %s with a to_id & score field' % \
-                (num_results, limit, table_name))
+            exception_string = 'Sanity check failed: only found %s / %s expected results in table %s with a to_id & score field' % \
+                    (num_results, limit, table_name)
+            logger.warn(exception_string)
+            if not self.sample_test:
+                raise RecsysException(exception_string)
 
         # do a check on specific ids
         self._sanity_check_ids(table)
@@ -231,8 +246,11 @@ class SanityTestDynamoDBTable(RecsysTask):
                 failure_count += 1
                 logger.info('Id %s only returned %s results.' % (from_id, len(list(results))))
         if failure_count > 2:
-            raise RecsysException('Sanity check failed: %s ids in table %s failed to return sufficient results' % \
-                (failure_count, table_name))
+            exception_string = 'Sanity check failed: %s ids in table %s failed to return sufficient results' % \
+                    (failure_count, table_name)
+            logger.warn(exception_string)
+            if not self.sample_test:
+                raise RecsysException(exception_string)
 
 
 class PromoteDynamoDBTablesToAPI(RecsysTask):
@@ -311,7 +329,10 @@ class VerifyApi(RecsysTask):
                 num_empty += 1
                 logger.info('Id %s only returned %s results.' % (item_id, len(response.json()['recommended_items'])))
         if num_empty > 2:
-            raise RecsysException('API verification failed: %s items had insufficient endpoint results' % num_empty)
+            exception_string = 'API verification failed: %s items had insufficient endpoint results' % num_empty
+            logger.warn(exception_string)
+            if not self.sample_test:
+                raise RecsysException(exception_string)
 
 
 class VerifyItemItemApi(VerifyApi):
