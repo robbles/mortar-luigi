@@ -44,6 +44,10 @@ class MortarProjectTask(MortarTask):
     # if a large enough cluster is running, it will be used,
     # otherwise, a new multi-use cluster will be started
     run_on_single_use_cluster = luigi.BooleanParameter(False)
+
+    # whether to use spot instances when starting a cluster
+    # for this job
+    use_spot_instances = luigi.BooleanParameter(False)
     
     # run on master by default
     git_ref = luigi.Parameter(default='master')
@@ -153,7 +157,7 @@ class MortarProjectTask(MortarTask):
             job_id = jobs.post_job_new_cluster(api, self.project(), self.script(), self.cluster_size, 
                 cluster_type=cluster_type, git_ref=self.git_ref, parameters=self.parameters(),
                 notify_on_job_finish=self.notify_on_job_finish, is_control_script=self.is_control_script(),
-                pig_version=self.pig_version)
+                pig_version=self.pig_version, use_spot_instances=self.use_spot_instances)
         logger.info('Submitted new job to mortar with job_id [%s]' % job_id)
         return job_id
         
