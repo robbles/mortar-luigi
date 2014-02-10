@@ -32,7 +32,7 @@ setup(name='mortar-luigi',
       install_requires=[
           'luigi',          
           'requests',
-          'boto>=2.0',
+          'boto==2.24.0',
           'mortar-api-python'
       ]
 )
