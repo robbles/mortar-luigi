@@ -11,17 +11,20 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations under
 # the License.
+import abc
 import time
 
 import boto.dynamodb2
 from boto.dynamodb2.exceptions import DynamoDBError
-from boto.dynamodb2.fields import HashKey, RangeKey
+from boto.dynamodb2.fields import HashKey, RangeKey, AllIndex
 from boto.dynamodb2.table import Table
-from boto.dynamodb2.types import NUMBER, STRING
+from boto.dynamodb2.types import STRING
 
-from luigi import configuration
+from luigi import configuration, Task, IntParameter, Parameter
 
 import logging
+from mortar.luigi import target_factory
+
 logger = logging.getLogger('luigi-interface')
 
 class DynamoDBClient(object):
@@ -112,3 +115,129 @@ class DynamoDBClient(object):
             raise RuntimeError('Timed out waiting for DynamoDB table %s to be ACTIVE' % table.table_name)
 
         return table
+
+class DynamoDBTask(Task):
+
+    @abc.abstractmethod
+    def table_name(self):
+        """
+        Name of the table to create.
+        """
+        raise RuntimeError("Must provide a table_name to create")
+
+    @abc.abstractmethod
+    def output_token(self):
+        """
+        Name of the table to create.
+        """
+        raise RuntimeError("Must provide an output token")
+
+    def output(self):
+        return self.output_token()
+
+
+class CreateDynamoDBTable(DynamoDBTask):
+    """
+    Create new table in DynamoDB to serve recommendations.
+    """
+    read_throughput = IntParameter()
+    write_throughput = IntParameter()
+
+    hash_key = Parameter()
+    hash_key_type = Parameter()
+    range_key = Parameter()
+    range_key_type = Parameter()
+
+    indexes = Parameter()
+
+    def generate_indexes(self):
+        all_index = []
+        for index in self.indexes:
+            all_index.append(AllIndex(index['name'], parts=[
+                HashKey(self.hash_key, data_type=self.range_key_type),
+                RangeKey(index['range_key'], data_type=index['data_type'])]))
+        return all_index
+
+    def run(self):
+        dynamodb_client = DynamoDBClient()
+        schema = [HashKey(self.hash_key, data_type=self.hash_key_type)]
+        if self.range_key:
+            schema.append(RangeKey(self.range_key, data_type=self.range_key_type))
+        throughput={'read': self.read_throughput,
+                    'write': self.write_throughput}
+        if self.indexes:
+            dynamodb_client.create_table(self.table_name(), schema, throughput, indexes=self.generate_indexes())
+        else:
+            dynamodb_client.create_table(self.table_name(), schema, throughput)
+
+        # write token to note completion
+        target_factory.write_file(self.output_token())
+
+
+class UpdateDynamoDBThroughput(DynamoDBTask):
+
+    read_throughput =  IntParameter()
+    write_throughput = IntParameter()
+
+    def run(self):
+        dynamodb_client = DynamoDBClient()
+        throughput={'read': self.read_throughput,
+                    'write': self.write_throughput}
+        dynamodb_client.update_throughput(self.table_name(), throughput)
+
+        # write an output token to S3 to confirm that we finished
+        target_factory.write_file(self.output_token())
+
+
+class SanityTestDynamoDBTable(DynamoDBTask):
+
+    test_length = IntParameter(5)
+    failure_threshold = IntParameter(2)
+    min_total_results = IntParameter(100)
+    hash_key = Parameter()
+    non_null_fields = Parameter([])
+
+    @abc.abstractmethod
+    def ids(self):
+        return RuntimeError("Must provide list of ids to sanity test")
+
+    def run(self):
+        dynamodb_client = DynamoDBClient()
+        table = dynamodb_client.get_table(self.table_name())
+
+        # do a quick sanity check
+        limit = self.min_total_results
+        kw = {'limit': limit}
+        for field in self.non_null_fields:
+            kw['%s__null' % field] = False
+        results = [r for r in table.scan(**kw)]
+        num_results = len(results)
+        if num_results < limit:
+            exception_string = 'Sanity check failed: only found %s / %s expected results in table %s with a to_id & score field' % \
+                    (num_results, limit, self.table_name())
+            logger.warn(exception_string)
+            raise DynamoTaskException(exception_string)
+
+        # do a check on specific ids
+        self._sanity_check_ids(table)
+
+        # write an output token to S3 to confirm that we finished
+        target_factory.write_file(self.output_token())
+
+    def _sanity_check_ids(self, table):
+        failure_count = 0
+        kw = {'limit': self.test_length}
+        for id in self.ids():
+            kw['%s__eq' % self.hash_key] = id
+            results = table.query(**kw)
+            if len(list(results)) < self.test_length:
+                failure_count += 1
+                logger.info('Id %s only returned %s results.' % (id, len(list(results))))
+        if failure_count > self.failure_threshold:
+            exception_string = 'Sanity check failed: %s ids in table %s failed to return sufficient results' % \
+                    (failure_count, self.table_name())
+            logger.warn(exception_string)
+            raise DynamoTaskException(exception_string)
+
+class DynamoTaskException(Exception):
+    pass
