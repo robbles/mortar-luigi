@@ -11,6 +11,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations under
 # the License.
+
 import abc
 import time
 
@@ -59,24 +60,24 @@ class DynamoDBClient(object):
         logger.info('Created new dynamodb table %s with schema %s' % \
             (table_name, schema))
         return self._poll_until_table_active(table)
-    
+
     def get_table(self, table_name):
         """
         Fetch a table from DynamoDB.
-        
-        NOTE: this is a somewhat expensive operation, 
+
+        NOTE: this is a somewhat expensive operation,
               which must query dynamo for the current state of the table
         """
         table = Table(table_name, connection=self.dynamo_cx)
-    
+
         # must describe the table, or it doesn't have the correct throughput values
         table.describe()
-    
+
         return table
 
     def update_throughput(self, table_name, throughput):
         """
-        Update a table's throughput in the stepwise fashion required for DynamoDB, 
+        Update a table's throughput in the stepwise fashion required for DynamoDB,
         polling until complete.
         """
         table = self.get_table(table_name)
