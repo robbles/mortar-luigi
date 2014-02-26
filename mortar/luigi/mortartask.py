@@ -35,6 +35,9 @@ class MortarTask(luigi.Task):
                    luigi.configuration.get_config().get('mortar', 'api_key'))
 
 class MortarProjectTask(MortarTask):
+    """
+    Task to run a Mortar job on a cluster. If the job fails, the task will exit with an error.
+    """
     
     # default to a cluster of size 2
     cluster_size = luigi.IntParameter(default=2)
@@ -106,9 +109,15 @@ class MortarProjectTask(MortarTask):
         raise RuntimeError("Must implement script_output!")
 
     def running_token(self):
+        """
+        Token written out to indicate a running Pigscript
+        """
         return target_factory.get_target('%s/%s-%s' % (self.token_path(), self.__class__.__name__, 'Running'))
 
     def success_token(self):
+        """
+        Token written out to indicate the Pigscript has finished
+        """
         return target_factory.get_target('%s/%s' % (self.token_path(), self.__class__.__name__))
 
     def run(self):
@@ -120,9 +129,11 @@ class MortarProjectTask(MortarTask):
             job_id = self.running_token().open().read().strip()
         else:
             job_id = self._run_job(api)
+            # to guarantee idempotence, record that the job is running
             target_factory.write_file(self.running_token(), text=job_id)
         job = self._poll_job_completion(api, job_id)
         final_job_status_code = job.get('status_code')
+        # record that the job has finished
         self.running_token().remove()
         if final_job_status_code != jobs.STATUS_SUCCESS:
             for out in self.script_output():
@@ -217,15 +228,25 @@ class MortarProjectTask(MortarTask):
         return desc
         
 class MortarProjectPigscriptTask(MortarProjectTask):
+    """
+    Task to run a Pig script on Mortar.
+    """
     
     def is_control_script(self):
         return False
 
 class MortarProjectControlscriptTask(MortarProjectTask):
+    """
+    Task to run a control script on Mortar.
+    """
 
     def is_control_script(self):
         return True
+
 class MortarClusterShutdownTask(MortarTask):
+    """
+    Shuts down all running clusters without active jobs for the specified user.
+    """
 
     def _get_running_idle_clusters(self, api):
         return [c for c in clusters.get_clusters(api).get('clusters') if not c.get('running_jobs')
