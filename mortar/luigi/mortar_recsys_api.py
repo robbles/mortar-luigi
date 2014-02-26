@@ -1,3 +1,16 @@
+# Copyright (c) 2014 Mortar Data
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not
+# use this file except in compliance with the License. You may obtain a copy of
+# the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations under
+# the License.
 import abc
 import json
 from luigi import Task, configuration
@@ -11,9 +24,14 @@ from mortar.luigi import target_factory
 
 logger = logging.getLogger('luigi-interface')
 
-class VerifyApi(Task):
 
-    rec_length = luigi.IntParameter(5)
+class VerifyApi(Task):
+    """
+    Task to verify that a mortar-recsys API endpoint has results
+    """
+
+    # number of results required to be returned for each primary key
+    result_length = luigi.IntParameter(5)
 
     def output(self):
         return [S3Target(self.output_path(self.__class__.__name__))]
@@ -29,6 +47,9 @@ class VerifyApi(Task):
                              configuration.get_config().get('recsys', 'password'))
 
     def run(self):
+        """
+        Verify API.
+        """
         self._verify_api()
 
         # write an output token to S3 to confirm that we finished
@@ -44,7 +65,7 @@ class VerifyApi(Task):
             endpoint = endpoint_func(item_id)
             response = requests.get(endpoint, auth=self.auth(), headers=self.headers())
             response.raise_for_status()
-            if len(response.json()['recommended_items']) < self.rec_length:
+            if len(response.json()['recommended_items']) < self.result_length:
                 num_empty += 1
                 logger.info('Id %s only returned %s results.' % (item_id, len(response.json()['recommended_items'])))
         if num_empty > 2:
@@ -54,13 +75,19 @@ class VerifyApi(Task):
                 raise RecsysAPIException(exception_string)
 
 class VerifyItemItemApi(VerifyApi):
+    """
+    Task to verify that the mortar-recsys item-item API endpoint has results
+    """
 
     # host for recsys API
     recsys_api_host = luigi.Parameter()
 
     @abc.abstractmethod
     def item_ids(self):
-        return RuntimeError("Must provide list of ids to sanity verify")
+        """
+        Ids to verify.
+        """
+        return RuntimeError("Must provide list of ids to verify")
 
     def _item_endpoint(self, item_id):
         return '%s/v1/recommend/items/%s' % (self.recsys_api_host, item_id)
@@ -73,13 +100,19 @@ class VerifyItemItemApi(VerifyApi):
         self._verify_endpoint(self._multisources_endpoint, self.item_ids())
 
 class VerifyUserItemApi(VerifyApi):
+    """
+    Task to verify that the mortar-recsys user-item API endpoint has results
+    """
 
     # host for recsys API
     recsys_api_host = luigi.Parameter()
 
     @abc.abstractmethod
     def user_ids(self):
-        return RuntimeError("Must provide list of ids to sanity verify")
+        """
+        Ids to verify.
+        """
+        return RuntimeError("Must provide list of ids to verify")
 
     def _user_endpoint(self, user_id):
         return '%s/v1/recommend/users/%s' % (self.recsys_api_host, user_id)
@@ -88,6 +121,9 @@ class VerifyUserItemApi(VerifyApi):
         self._verify_endpoint(self._user_endpoint, self.user_ids())
 
 class PromoteDynamoDBTablesToAPI(Task):
+    """
+    Set the DynamoDB tables used by the mortar-recsys API.
+    """
 
     # host for recsys API
     recsys_api_host = luigi.Parameter()

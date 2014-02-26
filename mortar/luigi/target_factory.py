@@ -15,7 +15,6 @@ import datetime
 from luigi.s3 import S3Target
 from luigi.target import FileSystemTarget
 
-# TODO: move into luigi
 def get_target(path):
     """
     Factory method for creating a target from a path.
@@ -27,8 +26,10 @@ def get_target(path):
     else:
         raise RuntimeError("Unknown scheme for path: %s" % path)
 
-
 def write_file(out_target, text=None):
+    """
+    Factory method for writing to a target.
+    """
     with out_target.open('w') as token_file:
         if text:
             token_file.write('%s\n' % text)
