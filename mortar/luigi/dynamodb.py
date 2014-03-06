@@ -266,7 +266,7 @@ class SanityTestDynamoDBTable(DynamoDBTask):
         results = [r for r in table.scan(**kw)]
         num_results = len(results)
         if num_results < limit:
-            exception_string = 'Sanity check failed: only found %s / %s expected results in table %s with a to_id & score field' % \
+            exception_string = 'Sanity check failed: only found %s / %s expected results in table %s' % \
                     (num_results, limit, self.table_name())
             logger.warn(exception_string)
             raise DynamoDBTaskException(exception_string)

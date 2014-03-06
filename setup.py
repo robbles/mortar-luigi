@@ -33,6 +33,9 @@ setup(name='mortar-luigi',
           'luigi',          
           'requests',
           'boto==2.24.0',
-          'mortar-api-python'
+          'mock',
+          'mortar-api-python',
+          'moto',
+          'nose==1.3.0'
       ]
 )
