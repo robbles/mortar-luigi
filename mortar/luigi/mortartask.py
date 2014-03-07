@@ -11,6 +11,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations under
 # the License.
+
 import abc
 import time
 
@@ -38,10 +39,10 @@ class MortarProjectTask(MortarTask):
     """
     Task to run a Mortar job on a cluster. If the job fails, the task will exit with an error.
     """
-    
+
     # default to a cluster of size 2
     cluster_size = luigi.IntParameter(default=2)
-    
+
     # whether to run this job on it's own cluster
     # or to use a multi-job cluster
     # if a large enough cluster is running, it will be used,
@@ -51,13 +52,13 @@ class MortarProjectTask(MortarTask):
     # whether to use spot instances when starting a cluster
     # for this job
     use_spot_instances = luigi.BooleanParameter(False)
-    
+
     # run on master by default
     git_ref = luigi.Parameter(default='master')
-    
+
     # Whether to notify on completion of a job
     notify_on_job_finish = luigi.BooleanParameter(default=False)
-    
+
     # interval (in seconds) to poll for job status
     job_polling_interval = luigi.IntParameter(default=5)
 
@@ -66,7 +67,7 @@ class MortarProjectTask(MortarTask):
 
     # version of Pig to use
     pig_version = luigi.Parameter(default=None)
-        
+
     @abc.abstractmethod
     def project(self):
         """
@@ -158,29 +159,29 @@ class MortarProjectTask(MortarTask):
                 logger.info('Using largest running idle cluster with cluster_id [%s], size [%s]' % \
                     (largest_cluster['cluster_id'], largest_cluster['size']))
                 cluster_id = largest_cluster['cluster_id']
-        
+
         if cluster_id:
             job_id = jobs.post_job_existing_cluster(api, self.project(), self.script(), cluster_id,
                 git_ref=self.git_ref, parameters=self.parameters(),
                 notify_on_job_finish=self.notify_on_job_finish, is_control_script=self.is_control_script(),
                 pig_version=self.pig_version)
         else:
-            job_id = jobs.post_job_new_cluster(api, self.project(), self.script(), self.cluster_size, 
+            job_id = jobs.post_job_new_cluster(api, self.project(), self.script(), self.cluster_size,
                 cluster_type=cluster_type, git_ref=self.git_ref, parameters=self.parameters(),
                 notify_on_job_finish=self.notify_on_job_finish, is_control_script=self.is_control_script(),
                 pig_version=self.pig_version, use_spot_instances=self.use_spot_instances)
         logger.info('Submitted new job to mortar with job_id [%s]' % job_id)
         return job_id
-        
+
     def _get_idle_clusters(self, api, min_size=0):
         return [cluster for cluster in clusters.get_clusters(api)['clusters'] \
             if (cluster.get('status_code') == clusters.CLUSTER_STATUS_RUNNING) and \
                (cluster.get('cluster_type_code') != clusters.CLUSTER_TYPE_SINGLE_JOB) and \
                (len(cluster.get('running_jobs')) == 0) and \
                (int(cluster.get('size')) >= min_size)]
-    
+
     def _poll_job_completion(self, api, job_id):
-        
+
         current_job_status = None
         current_progress = None
 
@@ -220,18 +221,18 @@ class MortarProjectTask(MortarTask):
                     time.sleep(self.job_polling_interval)
                 else:
                     raise
-    
+
     def _get_job_status_description(self, job):
         desc = job.get('status_description')
         if job.get('status_details'):
             desc += ' - %s' % job.get('status_details')
         return desc
-        
+
 class MortarProjectPigscriptTask(MortarProjectTask):
     """
     Task to run a Pig script on Mortar.
     """
-    
+
     def is_control_script(self):
         return False
 

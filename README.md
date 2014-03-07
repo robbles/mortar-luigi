@@ -1,5 +1,7 @@
 # mortar-luigi
 
+[![Build Status](https://travis-ci.org/mortardata/mortar-luigi.png?branch=master)](https://travis-ci.org/mortardata/mortar-luigi)
+
 ## Installation
 
     # create a virtualenv
