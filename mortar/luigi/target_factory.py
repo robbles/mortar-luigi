@@ -15,6 +15,7 @@
 import datetime
 from luigi.s3 import S3Target
 from luigi.target import FileSystemTarget
+from luigi import LocalTarget
 
 def get_target(path):
     """
@@ -22,6 +23,9 @@ def get_target(path):
     """
     if path.startswith('s3:'):
         return S3Target(path)
+    elif path.startswith('/'):
+        return LocalTarget(path)
+        
     elif path.startswith('file:'):
         return FileSystemTarget(path)
     else:
