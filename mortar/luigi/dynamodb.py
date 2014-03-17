@@ -160,10 +160,10 @@ class CreateDynamoDBTable(DynamoDBTask):
     hash_key_type = luigi.Parameter()
 
     # Name of the primary range key for this table, if it exists
-    range_key = luigi.Parameter()
+    range_key = luigi.Parameter(None)
 
     # Type of the primary range key for this table, if it exists (boto.dynamodb2.types)
-    range_key_type = luigi.Parameter()
+    range_key_type = luigi.Parameter(None)
 
     # Secondary indexes of the table, provided as a list of dictionaries
     # [ {'name': sec_index, 'range_key': range_key_name, 'data_type': NUMBER} ]
