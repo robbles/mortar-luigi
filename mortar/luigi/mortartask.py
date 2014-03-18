@@ -51,7 +51,7 @@ class MortarProjectTask(MortarTask):
 
     # whether to use spot instances when starting a cluster
     # for this job
-    use_spot_instances = luigi.BooleanParameter(False)
+    use_spot_instances = luigi.BooleanParameter(True)
 
     # run on master by default
     git_ref = luigi.Parameter(default='master')
