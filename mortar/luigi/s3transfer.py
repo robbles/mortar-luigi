@@ -11,17 +11,17 @@ Generic task to move s3 to local target and vice-versa
     requires definition of input() and output()
 """
 class S3TransferTask(luigi.Task):
-    # aws keys
-    aws_access_key_id = configuration.get_config().get('s3', 'aws_s3_access_key_id')
-    aws_secret_access_key = configuration.get_config().get('s3', 'aws_s3_secret_access_key')
-    token_base = configuration.get_config().get('transfers', 'local_token_base')
-
     # s3 path to where file should be/go
     s3_path = Parameter()
     local_path = Parameter()
     file_name = Parameter()
-    #local directory and file name
-   
+
+    def get_aws_keys(self):
+        if not hasattr(self, "aws_access_key_id") and  not hasattr(self, "aws_secret_access_key") :
+            self.aws_access_key_id = configuration.get_config().get('s3', 'aws_s3_access_key_id')
+            self.aws_secret_access_key = configuration.get_config().get('s3', 'aws_s3_secret_access_key')
+        return [self.aws_access_key_id, self.aws_secret_access_key]
+
     def output(self):
         return [self.success_token()]
 
@@ -51,9 +51,9 @@ class S3TransferTask(luigi.Task):
 
 
     def run(self):
-        if self.running_token().exists():
-            self.running_token().remove()
-        target_factory.write_file(self.running_token())
+      #  if self.running_token().exists():
+      #      self.running_token().remove()
+     #   target_factory.write_file(self.running_token())
         r = self.input_file().open('r')
         w = self.output_file().open('w')
         w.write(r.readline())
@@ -78,12 +78,11 @@ class LocalToS3Task(S3TransferTask):
         return LocalTarget(self.local_path + '/' + self.file_name)
 
     def output_file(self):
-        print self.aws_access_key_id
-        return S3Target(self.s3_path + '/' + self.file_name, client=S3Client(self.aws_access_key_id, self.aws_secret_access_key))
+        aws_access_key_id, aws_secret_access_key = self.get_aws_keys()
+        return S3Target(self.s3_path + '/' + self.file_name, client=S3Client(aws_access_key_id, aws_secret_access_key))
 
 
 class S3ToLocalTask(S3TransferTask):
-    token_file =  datetime.datetime.utcnow().isoformat()
     def token_path(self):
         return self.local_path
 
@@ -91,4 +90,7 @@ class S3ToLocalTask(S3TransferTask):
         return LocalTarget(self.local_path + '/' + self.file_name)
 
     def input_file(self):
-        return S3Target(self.s3_path + '/' + self.file_name, client=S3Client(self.aws_access_key_id, self.aws_secret_access_key))
+        aws_access_key_id, aws_secret_access_key = self.get_aws_keys()
+        return S3Target(self.s3_path + '/' + self.file_name, client=S3Client(aws_access_key_id, aws_secret_access_key))
+
+
