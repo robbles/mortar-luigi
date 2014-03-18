@@ -18,8 +18,8 @@ class S3TransferTask(luigi.Task):
 
     def get_aws_keys(self):
         if not hasattr(self, "aws_access_key_id") and  not hasattr(self, "aws_secret_access_key") :
-            self.aws_access_key_id = configuration.get_config().get('s3', 'aws_s3_access_key_id')
-            self.aws_secret_access_key = configuration.get_config().get('s3', 'aws_s3_secret_access_key')
+            self.aws_access_key_id = luigi.configuration.get_config().get('s3', 'aws_s3_access_key_id')
+            self.aws_secret_access_key = luigi.configuration.get_config().get('s3', 'aws_s3_secret_access_key')
         return [self.aws_access_key_id, self.aws_secret_access_key]
 
     def output(self):
