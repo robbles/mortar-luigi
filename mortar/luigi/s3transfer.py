@@ -16,20 +16,14 @@ class S3TransferTask(luigi.Task):
     local_path = Parameter()
     file_name = Parameter()
 
-    def get_aws_keys(self):
-        if not hasattr(self, "aws_access_key_id") and  not hasattr(self, "aws_secret_access_key") :
-            self.aws_access_key_id = luigi.configuration.get_config().get('s3', 'aws_s3_access_key_id')
-            self.aws_secret_access_key = luigi.configuration.get_config().get('s3', 'aws_s3_secret_access_key')
-        return [self.aws_access_key_id, self.aws_secret_access_key]
+    def get_s3_client(self):
+        if not hasattr(self, "client"):
+            self.client = S3Client(luigi.configuration.get_config().get('s3', 'aws_s3_access_key_id'), luigi.configuration.get_config().get('s3', 'aws_s3_secret_access_key'))
+        return self.client
 
     def output(self):
         return [self.success_token()]
 
-    def running_token(self):
-        """
-        Token written out to indicate a running Pigscript
-        """
-        return target_factory.get_target('%s/%s-%s' % (self.token_path(), self.__class__.__name__, 'Running'))
 
     def success_token(self):
         """
@@ -42,30 +36,22 @@ class S3TransferTask(luigi.Task):
         raise RuntimeError("Must implement token_path!")
 
     @abc.abstractmethod
-    def input_file(self):
-        raise RuntimeError("Must implement input_file!")
+    def input_target(self):
+        raise RuntimeError("Must implement input_target!")
 
     @abc.abstractmethod
-    def output_file(self):
-        raise RuntimeError("Must implement output_file!")
+    def output_target(self):
+        raise RuntimeError("Must implement output_target!")
 
 
     def run(self):
-      #  if self.running_token().exists():
-      #      self.running_token().remove()
-     #   target_factory.write_file(self.running_token())
-        r = self.input_file().open('r')
-        w = self.output_file().open('w')
-        w.write(r.readline())
+        r = self.input_target().open('r')
+        w = self.output_target().open('w')
+        w.write(r.read())
         w.close()
             
         target_factory.write_file(self.success_token())
 
-        # check if success exists
-          #if does, move on
-          # if not, check if running exists
-            # if yes, find current line, start writing
-            # else, start writing at beginning
 
 
 
@@ -74,23 +60,21 @@ class LocalToS3Task(S3TransferTask):
     def token_path(self):
         return self.local_path
 
-    def input_file(self):
+    def input_target(self):
         return LocalTarget(self.local_path + '/' + self.file_name)
 
-    def output_file(self):
-        aws_access_key_id, aws_secret_access_key = self.get_aws_keys()
-        return S3Target(self.s3_path + '/' + self.file_name, client=S3Client(aws_access_key_id, aws_secret_access_key))
+    def output_target(self):
+        return S3Target(self.s3_path + '/' + self.file_name, client=self.get_s3_client())
 
 
 class S3ToLocalTask(S3TransferTask):
     def token_path(self):
         return self.local_path
 
-    def output_file(self):
+    def output_target(self):
         return LocalTarget(self.local_path + '/' + self.file_name)
 
-    def input_file(self):
-        aws_access_key_id, aws_secret_access_key = self.get_aws_keys()
-        return S3Target(self.s3_path + '/' + self.file_name, client=S3Client(aws_access_key_id, aws_secret_access_key))
+    def input_target(self):
+        return S3Target(self.s3_path + '/' + self.file_name, client=self.get_s3_client())
 
 
