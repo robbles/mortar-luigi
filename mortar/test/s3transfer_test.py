@@ -40,7 +40,7 @@ class TestS3ToLocalTask(unittest.TestCase):
         luigi.build([t], local_scheduler=True)
         self.assertEquals(self.tempFilePath, t.input_target().path)
         self.assertEquals("%s/%s" % (s3_path, self.file_name), t.output_target().path)
-        self.assertEquals("%s/LocalToS3Task" % self.local_path, t.output()[0].path)
+        self.assertEquals("%s/%s" % (s3_path, self.file_name), t.output()[0].path)
 
     @mock_s3
     @patch("luigi.configuration")
@@ -84,7 +84,7 @@ class TestLocalToS3Task(unittest.TestCase):
         luigi.build([t], local_scheduler=True)
         self.assertEquals(self.tempFilePath, t.output_target().path)
         self.assertEquals("%s/%s" % (s3_path, self.file_name), t.input_target().path)
-        self.assertEquals("%s/S3ToLocalTask" % self.local_path, t.output()[0].path)
+        self.assertEquals("%s/%s" % (self.local_path, self.file_name), t.output()[0].path)
 
     @mock_s3
     @patch("luigi.configuration")

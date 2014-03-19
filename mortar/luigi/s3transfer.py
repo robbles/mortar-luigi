@@ -22,18 +22,9 @@ class S3TransferTask(luigi.Task):
         return self.client
 
     def output(self):
-        return [self.success_token()]
+        return [self.output_target()]
 
 
-    def success_token(self):
-        """
-        Token written out to indicate the Pigscript has finished
-        """
-        return target_factory.get_target('%s/%s' % (self.token_path(), self.__class__.__name__))
-
-    @abc.abstractmethod
-    def token_path(self):
-        raise RuntimeError("Must implement token_path!")
 
     @abc.abstractmethod
     def input_target(self):
@@ -45,10 +36,15 @@ class S3TransferTask(luigi.Task):
 
 
     def run(self):
-        r = self.input_target().open('r')
-        w = self.output_target().open('w')
-        w.write(r.read())
-        w.close()
+        if not self.output()[0].exists():
+            try:
+                r = self.input_target().open('r')
+                w = self.output_target().open('w')
+                w.write(r.read())
+                w.close()
+            except:
+                if self.output().exists(self.output_target().path):
+                    self.output().remove()
             
         target_factory.write_file(self.success_token())
 
@@ -57,8 +53,6 @@ class S3TransferTask(luigi.Task):
 
 class LocalToS3Task(S3TransferTask):
 
-    def token_path(self):
-        return self.local_path
 
     def input_target(self):
         return LocalTarget(self.local_path + '/' + self.file_name)
@@ -68,8 +62,6 @@ class LocalToS3Task(S3TransferTask):
 
 
 class S3ToLocalTask(S3TransferTask):
-    def token_path(self):
-        return self.local_path
 
     def output_target(self):
         return LocalTarget(self.local_path + '/' + self.file_name)
