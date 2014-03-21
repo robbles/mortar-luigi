@@ -33,6 +33,7 @@ setup(name='mortar-luigi',
           'luigi',
           'requests',
           'boto==2.24.0',
+          'pymongo>=2.5',
           'mortar-api-python'
       ],
       test_requires=[
