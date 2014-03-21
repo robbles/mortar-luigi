@@ -34,9 +34,7 @@ setup(name='mortar-luigi',
           'requests',
           'boto==2.24.0',
           'pymongo>=2.5',
-          'mortar-api-python'
-      ],
-      test_requires=[
+          'mortar-api-python',
           'mock',
           'moto',
           'nose==1.3.0'
