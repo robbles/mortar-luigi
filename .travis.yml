@@ -4,4 +4,4 @@ python:
 install:
   - pip install mock --use-mirrors
   - python setup.py -q install
-script: nosetests -v
+script: python setup.py test -v
