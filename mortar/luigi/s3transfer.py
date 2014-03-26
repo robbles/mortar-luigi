@@ -24,8 +24,6 @@ class S3TransferTask(luigi.Task):
     def output(self):
         return [self.output_target()]
 
-
-
     @abc.abstractmethod
     def input_target(self):
         raise RuntimeError("Must implement input_target!")
@@ -33,7 +31,6 @@ class S3TransferTask(luigi.Task):
     @abc.abstractmethod
     def output_target(self):
         raise RuntimeError("Must implement output_target!")
-
 
     def run(self):
         if not self.output()[0].exists():
@@ -45,14 +42,9 @@ class S3TransferTask(luigi.Task):
             except:
                 if self.output().exists(self.output_target().path):
                     self.output().remove()
-            
-        target_factory.write_file(self.success_token())
-
-
 
 
 class LocalToS3Task(S3TransferTask):
-
 
     def input_target(self):
         return LocalTarget(self.local_path + '/' + self.file_name)
