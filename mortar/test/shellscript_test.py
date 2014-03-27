@@ -6,10 +6,6 @@ class TestShellScriptTask(ShellScriptTask):
     def subprocess_commands(self):
         return 'echo hello-world; echo hello-world-again;'
         
-class TestErrorShellScriptTask(ShellScriptTask):
-    def subprocess_commands(self):
-        return 'ls this-is-a-fake-file'
-
 class TestShellScript(unittest.TestCase):
 
     def setUp(self):
@@ -46,7 +42,7 @@ class TestShellScript(unittest.TestCase):
         """
         Raise exception at error
         """
-        t = TestErrorShellScriptTask(self.token_path) 
+        t = TestShellScriptTask(self.token_path) 
         self.t = t 
-        self.assertRaises(RuntimeError, lambda: t.check_error('error', 'error message'))
+        self.assertRaises(RuntimeError, lambda: t._check_error('error', 'error message'))
 

@@ -31,34 +31,37 @@ class ShellScriptTask(luigi.Task):
         raise RuntimeError("Must implement subprocess_commands!")
     
     def run(self):
-        if not self.output_token().exists():
-            cmd = self.subprocess_commands()
-            output = subprocess.Popen(
-                cmd,
-                shell=True,
-                stdout = subprocess.PIPE,
-                stderr = subprocess.PIPE
-            )
-            out, err = output.communicate()
-            # generate output message
-            message = ''
-            message += '\n-----------------------------'
-            message += '\nCMD    : %s' % cmd
-            message += '\nSTDOUT : %s' % repr(out)
-            message += '\nSTDERR : %s' % repr(err)
-            message += '\n-----------------------------'
-            self.check_error(err, message)
+        cmd = self.subprocess_commands()
+        output = subprocess.Popen(
+            cmd,
+            shell=True,
+            stdout = subprocess.PIPE,
+            stderr = subprocess.PIPE
+        )
+        out, err = output.communicate()
+        # generate output message
+        message = self._create_message(cmd, out, err)
+        self._check_error(err, message)
 
-            self.cmd_output = {
-              'cmd'   : cmd,
-              'stdout': out,
-              'stderr': err
-            }
-            logger.debug('%s - output:%s' % (self.__class__.__name__, message))
-            if err == '':
-                target_factory.write_file(self.output_token())
+        self.cmd_output = {
+          'cmd'   : cmd,
+          'stdout': out,
+          'stderr': err
+        }
+        logger.debug('%s - output:%s' % (self.__class__.__name__, message))
+        if err == '':
+            target_factory.write_file(self.output_token())
 
-    def check_error(self, err, message):
+    def _create_message(self, cmd, out, err):
+        message = ''
+        message += '\n-----------------------------'
+        message += '\nCMD    : %s' % cmd
+        message += '\nSTDOUT : %s' % repr(out)
+        message += '\nSTDERR : %s' % repr(err)
+        message += '\n-----------------------------'
+        return message
+
+    def _check_error(self, err, message):
         if err != '':
             raise RuntimeError(message)
             

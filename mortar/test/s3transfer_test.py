@@ -1,7 +1,7 @@
 import unittest, luigi, tempfile, os
 from luigi import LocalTarget, configuration
 from mock import patch
-from mortar.luigi.s3transfer import LocalToS3Task, S3ToLocalTask
+from mortar.luigi.s3transfer import LocalToS3Task, S3ToLocalTask, S3TransferTask
 from luigi.s3 import S3Target, S3PathTask, S3Client
 import boto
 from boto.s3.key import Key
@@ -12,6 +12,7 @@ import moto
 s3_path = 's3://bucket/key'
 AWS_ACCESS_KEY = "XXXXXX"
 AWS_SECRET_KEY = "XXXXXX"
+
 
 class TestS3ToLocalTask(unittest.TestCase):
     @mock_s3
