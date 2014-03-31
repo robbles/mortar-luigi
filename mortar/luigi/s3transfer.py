@@ -11,8 +11,8 @@ Generic task to move s3 to local target and vice-versa
     requires definition of input() and output()
     Configuration file requires
     [s3] 
-    aws_s3_access_key_id:
-    aws_s3_secret_access_key:
+    aws_access_key_id:
+    aws_secret_access_key:
 """
 class S3TransferTask(luigi.Task):
     # s3 path to where file should be/go
@@ -22,7 +22,7 @@ class S3TransferTask(luigi.Task):
 
     def get_s3_client(self):
         if not hasattr(self, "client"):
-            self.client = S3Client(luigi.configuration.get_config().get('s3', 'aws_s3_access_key_id'), luigi.configuration.get_config().get('s3', 'aws_s3_secret_access_key'))
+            self.client = S3Client(luigi.configuration.get_config().get('s3', 'aws_access_key_id'), luigi.configuration.get_config().get('s3', 'aws_secret_access_key'))
         return self.client
 
     def output(self):
@@ -45,7 +45,7 @@ class S3TransferTask(luigi.Task):
                 w.close()
             except:
                 basic_error = "Error in writing from %s to %s" % (self.input_target().path, self.output_target().path)
-                if self.output().exists(self.output_target().path):
+                if self.output_target().exists():
                     try:
                         self.output().remove()
                     except:
