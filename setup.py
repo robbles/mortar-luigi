@@ -3,6 +3,12 @@ try:
 except:
     from distutils.core import setup
 
+# Workaround for nose bug from: http://bugs.python.org/issue15881
+try:
+    import multiprocessing
+except ImportError:
+    pass
+
 from distutils.core import setup
 
 try:
@@ -40,6 +46,6 @@ setup(name='mortar-luigi',
       tests_require=[
           'mock',
           'moto',
-          'nose==1.3.0'
+          'nose>=1.3.0'
       ]
 )
