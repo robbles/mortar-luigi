@@ -11,9 +11,9 @@ class MortarSqoopTask(S3PathTask):
     One required parameter:
         path - s3n path where results are stored
     Three optional parameters:
-        jdbc_driver - Name of the JDBC driver class (COM.DRIVER.BAR)
-        direct -   Use a direct import path
-        driver_jar - Path to the jar containing the jdbc driver
+        jdbc_driver = Name of the JDBC driver class (example: COM.DRIVER.BAR)
+        direct =   Use a direct import path (example: file://path/to/data)
+        driver_jar = Path to the jar containing the jdbc driver (example: file://path/to/driver)
     """
 
     # path is a parameter
@@ -89,6 +89,8 @@ class MortarSqoopQueryTask(MortarSqoopTask):
     mortar local:sqoop_query dbtype database-name query s3-destination 
 
     sql_query must be implemented with the query that is going to be run
+    Required Parameters:
+        path = s3n path to where data will be stored
     """
 
     def command(self):
@@ -106,6 +108,12 @@ class MortarSqoopIncrementalTask(MortarSqoopTask):
     Export all records where column is > value
     Runs:
     mortar local:sqoop_incremental dbtype database-name table column value s3-destination
+
+    Required Parameters:
+        path = s3n path to where data will be stored
+        table = table you are extracting from
+        column = column of table you are comparing against
+        value = minimum threshold of column
     """
     table = luigi.Parameter()
     column = luigi.Parameter()
@@ -119,9 +127,13 @@ class MortarSqoopIncrementalTask(MortarSqoopTask):
 
 class MortarSqoopTableTask(MortarSqoopTask):
     """
-    Export data from an RDBMS table to S3.
+    Export all data from an RDBMS table to S3.
     Runs:
     mortar local:sqoop_table dbtype database-name table s3-destination
+
+    Required Parameter:
+        path = s3n path to where data will be stored
+        table = table you are extracting from
     """
     table = luigi.Parameter()
 
