@@ -8,11 +8,15 @@ logger = logging.getLogger('luigi-interface')
 class MortarSqoopTask(S3PathTask):
     """
     Base class for Mortar Sqoop commands
+    Mortar Sqoop is a local tool to extract data from a JDBC database to an S3 bucket
+    See http://help.mortardata.com/integrations/sql_databases for more information on how
+    to use sqoop
+
     One required parameter:
         path - s3n path where results are stored
     Three optional parameters:
         jdbc_driver = Name of the JDBC driver class (example: COM.DRIVER.BAR)
-        direct =   Use a direct import path (example: file://path/to/data)
+        direct =   Use a direct import path (example: file://path/to/data) - this is hardly used
         driver_jar = Path to the jar containing the jdbc driver (example: file://path/to/driver)
     """
 
