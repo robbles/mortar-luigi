@@ -64,26 +64,16 @@ class TestMortarSqoopBase(unittest.TestCase):
 
     @patch("os.system")
     def test_run_options_with_direct(self, os_mock):
-        t = MortarSqoopTaskTest(path=S3_PATH, direct='some/path')
+        t = MortarSqoopTaskTest(path=S3_PATH, direct=True)
         luigi.build([t], local_scheduler=True)
-        option_string = EXPECTED_STR + ' -d some/path'
+        option_string = EXPECTED_STR + ' --direct'
         self.assertEqual(t.command_str , option_string)
 
     @patch("os.system")
     def test_run_options_with_all_direct(self, os_mock):
-        t = MortarSqoopTaskTest(path=S3_PATH, direct='some/path',
+        t = MortarSqoopTaskTest(path=S3_PATH, direct=True,
                                 jdbc_driver='jdbc/path', driver_jar='jar/path')
         luigi.build([t], local_scheduler=True)
-        option_string = EXPECTED_STR + ' -r jar/path -d some/path -j jdbc/path'
+        option_string = EXPECTED_STR + ' -r jar/path --direct -j jdbc/path'
         self.assertEqual(t.command_str , option_string)
 
-
-
-
-
-
-
-
-
-    
-    

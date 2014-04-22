@@ -27,7 +27,7 @@ class MortarSqoopTask(S3PathTask):
 
     Three optional parameters:
         jdbc_driver = Name of the JDBC driver class (example: COM.DRIVER.BAR)
-        direct = Use a direct path of native db tools instead of jdbc queries (hardly used)
+        direct = Pass in True as a boolean to use native db tools instead of jdbc queries (hardly used)
         driver_jar = Path to the jar containing the jdbc driver (example: file://path/to/driver)
 
     """
@@ -74,14 +74,14 @@ class MortarSqoopTask(S3PathTask):
         os.environ['AWS_ACCESS_KEY'] = aws_params['aws_access_key_id']
         os.environ['AWS_SECRET_KEY'] = aws_params['aws_secret_access_key']
 
-    def _append_array_if_item_exists(self, array, item, option_key):
+    def _append_array_if_item_exists(self, array, item, value):
         if item != None:
-            array.append('-%s %s' % (option_key, item)) 
+            array.append(value) 
 
 
     def run(self):
         params = self.parameters()
-        command_str = [
+        command_arr = [
             'mortar',
             'local:%s' % self.command(),
             params['dbtype'],
@@ -92,11 +92,18 @@ class MortarSqoopTask(S3PathTask):
             '-p %s' % params['password'],
             '--host %s' % (params['host'] + ':' + params['port'] if params['port'] != '' else params['host'])]
 
-        self._append_array_if_item_exists(command_str, self.driver_jar, 'r')
-        self._append_array_if_item_exists(command_str, self.direct, 'd')
-        self._append_array_if_item_exists(command_str, self.jdbc_driver, 'j')
+        self._append_array_if_item_exists(command_arr, 
+                                          self.driver_jar, 
+                                          '-r %s' % self.driver_jar)
+        self._append_array_if_item_exists(command_arr, 
+                                          self.direct, 
+                                          '--direct')
+        self._append_array_if_item_exists(command_arr, 
+                                         self.jdbc_driver, 
+                                         '-j %s' % self.jdbc_driver)
 
-        command_str = ' '.join(command_str)
+        logger.debug(command_arr)
+        command_str = ' '.join(command_arr)
         self.command_str = command_str
         self.set_aws_keys()
         logger.debug(command_str)
@@ -110,6 +117,10 @@ class MortarSqoopQueryTask(MortarSqoopTask):
     mortar local:sqoop_query dbtype database-name query path 
 
     sql_query must be implemented with the query that is going to be run
+    Example:
+    def sql_query(self):
+        return 'select user_id, name from user'
+
     Required Parameters:
         path = s3n path to where data will be stored
     """
@@ -122,10 +133,6 @@ class MortarSqoopQueryTask(MortarSqoopTask):
 
     @abc.abstractmethod
     def sql_query(self):
-        """
-        Example: 
-        return 'select user_id, name from user'
-        """
         raise RuntimeError("must implement sql query!")
 
 class MortarSqoopIncrementalTask(MortarSqoopTask):
