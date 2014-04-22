@@ -14,10 +14,22 @@ class MortarSqoopTask(S3PathTask):
 
     One required parameter:
         path - s3n path where results are stored
+    Additional requirements are database configuration
+    set in the client.cfg file.  
+    Example:
+    [database]
+    dbtype: ${example: postgres}
+    database: ${example: mydatabase}
+    host: ${example: localhost}
+    port: ${example: 1234}
+    username: ${example: myusername}
+    password: ${example: mypassword}
+
     Three optional parameters:
         jdbc_driver = Name of the JDBC driver class (example: COM.DRIVER.BAR)
-        direct =   Use a direct import path (example: file://path/to/data) - this is hardly used
+        direct = Use a direct path of native db tools instead of jdbc queries (hardly used)
         driver_jar = Path to the jar containing the jdbc driver (example: file://path/to/driver)
+
     """
 
     # path is a parameter
@@ -25,11 +37,16 @@ class MortarSqoopTask(S3PathTask):
     direct = luigi.Parameter(default=None)
     driver_jar = luigi.Parameter(default=None)
         
+    
     def parameters(self):
+        """
+        These values are required parameters
+        Set them in the client.cfg file
+        """
         config = luigi.configuration.get_config()
         return {
-                'dbtype' : config.get('database', 'dbtype'),
-                'database' : config.get('database', 'database'),
+                'dbtype' : config.get('database', 'dbtype'), # example (postgres, mysql, etc)
+                'database' : config.get('database', 'database'), # example(mydatabase)
                 'host' : config.get('database', 'host'),
                 'port' : config.get('database', 'port', ''),
                 'username' : config.get('database', 'username'),
@@ -90,7 +107,7 @@ class MortarSqoopQueryTask(MortarSqoopTask):
     """
     Export the result of an SQL query to S3.
     Runs:
-    mortar local:sqoop_query dbtype database-name query s3-destination 
+    mortar local:sqoop_query dbtype database-name query path 
 
     sql_query must be implemented with the query that is going to be run
     Required Parameters:
@@ -105,13 +122,17 @@ class MortarSqoopQueryTask(MortarSqoopTask):
 
     @abc.abstractmethod
     def sql_query(self):
+        """
+        Example: 
+        return 'select user_id, name from user'
+        """
         raise RuntimeError("must implement sql query!")
 
 class MortarSqoopIncrementalTask(MortarSqoopTask):
     """
     Export all records where column is > value
     Runs:
-    mortar local:sqoop_incremental dbtype database-name table column value s3-destination
+    mortar local:sqoop_incremental dbtype database-name table column value path 
 
     Required Parameters:
         path = s3n path to where data will be stored
@@ -133,7 +154,7 @@ class MortarSqoopTableTask(MortarSqoopTask):
     """
     Export all data from an RDBMS table to S3.
     Runs:
-    mortar local:sqoop_table dbtype database-name table s3-destination
+    mortar local:sqoop_table dbtype database-name table path 
 
     Required Parameter:
         path = s3n path to where data will be stored
