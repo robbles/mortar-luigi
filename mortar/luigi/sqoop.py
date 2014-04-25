@@ -127,9 +127,13 @@ class MortarSqoopQueryTask(MortarSqoopTask):
 
     def command(self):
         return 'sqoop_query'
+
+    def shellquote(self, s):
+        # Stolen from http://stackoverflow.com/a/35857
+        return "'" + s.replace("'", "'\\''") + "'"
     
     def arguments(self):
-        return "'%s'" % self.sql_query()
+        return self.shellquote("'%s'" % self.sql_query())
 
     @abc.abstractmethod
     def sql_query(self):
