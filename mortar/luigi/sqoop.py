@@ -2,6 +2,7 @@ import abc
 import luigi, os
 from luigi.s3 import S3PathTask
 import logging
+from subprocess import check_output
 
 logger = logging.getLogger('luigi-interface')
 
@@ -74,40 +75,40 @@ class MortarSqoopTask(S3PathTask):
         os.environ['AWS_ACCESS_KEY'] = aws_params['aws_access_key_id']
         os.environ['AWS_SECRET_KEY'] = aws_params['aws_secret_access_key']
 
-    def _append_array_if_item_exists(self, array, item, value):
+    def _append_array_if_item_exists(self, array, item, values):
         if item != None:
-            array.append(value) 
+            for v in values:
+                array.append(v) 
 
 
     def run(self):
         params = self.parameters()
-        command_arr = [
+        argv = [
             'mortar',
             'local:%s' % self.command(),
             params['dbtype'],
-            params['database'],
-            self.arguments(),
-            self.path,
-            '-u %s' % params['username'],
-            '-p %s' % params['password'],
-            '--host %s' % (params['host'] + ':' + params['port'] if params['port'] != '' else params['host'])]
+            params['database']] + \
+            self.arguments() + \
+            [self.path,
+            '-u', params['username'],
+            '-p', params['password'],
+            '--host', (params['host'] + ':' + params['port'] if params['port'] != '' else params['host'])]
 
-        self._append_array_if_item_exists(command_arr, 
+        self._append_array_if_item_exists(argv, 
                                           self.driver_jar, 
-                                          '-r %s' % self.driver_jar)
-        self._append_array_if_item_exists(command_arr, 
+                                          ['-r', self.driver_jar])
+        self._append_array_if_item_exists(argv, 
                                           self.direct, 
-                                          '--direct')
-        self._append_array_if_item_exists(command_arr, 
+                                          ['--direct'])
+        self._append_array_if_item_exists(argv, 
                                          self.jdbc_driver, 
-                                         '-j %s' % self.jdbc_driver)
+                                         ['-j', self.jdbc_driver])
 
-        logger.debug(command_arr)
-        command_str = ' '.join(command_arr)
-        self.command_str = command_str
+        logger.debug(argv)
+        self.argv = argv
         self.set_aws_keys()
-        logger.debug(command_str)
-        os.system(command_str)
+        check_output(argv)        
+        
 
 
 class MortarSqoopQueryTask(MortarSqoopTask):
@@ -127,13 +128,9 @@ class MortarSqoopQueryTask(MortarSqoopTask):
 
     def command(self):
         return 'sqoop_query'
-
-    def shellquote(self, s):
-        # Stolen from http://stackoverflow.com/a/35857
-        return "'" + s.replace("'", "'\\''") + "'"
     
     def arguments(self):
-        return self.shellquote("'%s'" % self.sql_query())
+        return [self.sql_query(),]
 
     @abc.abstractmethod
     def sql_query(self):
@@ -159,7 +156,7 @@ class MortarSqoopIncrementalTask(MortarSqoopTask):
         return 'sqoop_incremental'
 
     def arguments(self):
-        return '%s %s %s' % (self.table, self.column, self.value)
+        return [self.table, self.column, self.value]
 
 class MortarSqoopTableTask(MortarSqoopTask):
     """
@@ -177,6 +174,6 @@ class MortarSqoopTableTask(MortarSqoopTask):
         return 'sqoop_table'
 
     def arguments(self):
-        return self.table
+        return [self.table,]
 
 
