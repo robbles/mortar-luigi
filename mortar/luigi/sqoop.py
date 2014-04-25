@@ -129,7 +129,7 @@ class MortarSqoopQueryTask(MortarSqoopTask):
         return 'sqoop_query'
     
     def arguments(self):
-        return '"%s"' % self.sql_query()
+        return "'%s'" % self.sql_query()
 
     @abc.abstractmethod
     def sql_query(self):
