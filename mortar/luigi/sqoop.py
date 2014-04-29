@@ -76,7 +76,7 @@ class MortarSqoopTask(S3PathTask):
         os.environ['AWS_SECRET_KEY'] = aws_params['aws_secret_access_key']
 
     def _append_array_if_item_exists(self, array, item, values):
-        if item and len(item) > 0:
+        if item:
             for v in values:
                 array.append(v) 
 
