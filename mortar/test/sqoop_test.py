@@ -38,7 +38,7 @@ class MortarSqoopTaskTest(MortarSqoopTask):
 
 
 
-EXPECTED_ARGV = ['mortar', 'local:test_command', 'some_dbtype', 'mydatabase', 'extra arguments', 's3n://my_bucket', '-u', 'myusername', '-p', 'mypassword', '--host', 'host:1234',]
+EXPECTED_ARGV = ['mortar', 'local:test_command', 'some_dbtype', 'mydatabase', 'extra arguments', 's3n://my_bucket', '--host', 'host:1234', '-u', 'myusername', '-p', 'mypassword']
 
 class TestMortarSqoopBase(unittest.TestCase):
     @patch.object(mortar_sqoop, 'check_output')

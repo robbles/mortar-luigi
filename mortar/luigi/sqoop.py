@@ -28,7 +28,7 @@ class MortarSqoopTask(S3PathTask):
 
     Three optional parameters:
         jdbc_driver = Name of the JDBC driver class (example: COM.DRIVER.BAR)
-        direct = Pass in True as a boolean to use native db tools instead of jdbc queries (hardly used)
+        direct = Pass in True as a boolean to use native db tools instead of jdbc queries (rarely used)
         driver_jar = Path to the jar containing the jdbc driver (example: file://path/to/driver)
 
     """
@@ -76,39 +76,46 @@ class MortarSqoopTask(S3PathTask):
         os.environ['AWS_SECRET_KEY'] = aws_params['aws_secret_access_key']
 
     def _append_array_if_item_exists(self, array, item, values):
-        if item != None:
+        if item:
             for v in values:
-                array.append(v) 
+                array.append(v)
 
 
     def run(self):
-        params = self.parameters()
-        argv = [
-            'mortar',
-            'local:%s' % self.command(),
-            params['dbtype'],
-            params['database']] + \
-            self.arguments() + \
-            [self.path,
-            '-u', params['username'],
-            '-p', params['password'],
-            '--host', (params['host'] + ':' + params['port'] if params['port'] != '' else params['host'])]
+        working_dir = os.getcwd()
+        try:
+            os.chdir(os.pardir)
 
-        self._append_array_if_item_exists(argv, 
-                                          self.driver_jar, 
-                                          ['-r', self.driver_jar])
-        self._append_array_if_item_exists(argv, 
-                                          self.direct, 
-                                          ['--direct'])
-        self._append_array_if_item_exists(argv, 
-                                         self.jdbc_driver, 
-                                         ['-j', self.jdbc_driver])
+            params = self.parameters()
 
-        logger.debug(argv)
-        self.argv = argv
-        self.set_aws_keys()
-        check_output(argv)        
-        
+            config_args = [self.path, '--host', (params['host'] + ':' + params['port'] if params['port'] != '' else params['host'])]
+            self._append_array_if_item_exists(config_args, params['username'], ['-u', params['username']])
+            self._append_array_if_item_exists(config_args, params['password'], ['-p', params['password']])
+
+            argv = [
+                'mortar',
+                'local:%s' % self.command(),
+                params['dbtype'],
+                params['database']] + \
+                self.arguments() + \
+                config_args
+
+            self._append_array_if_item_exists(argv,
+                                              self.driver_jar,
+                                              ['-r', self.driver_jar])
+            self._append_array_if_item_exists(argv,
+                                              self.direct,
+                                              ['--direct'])
+            self._append_array_if_item_exists(argv,
+                                             self.jdbc_driver,
+                                             ['-j', self.jdbc_driver])
+
+            logger.debug(argv)
+            self.argv = argv
+            self.set_aws_keys()
+            check_output(argv)
+        finally:
+            os.chdir(working_dir)
 
 
 class MortarSqoopQueryTask(MortarSqoopTask):
@@ -117,7 +124,7 @@ class MortarSqoopQueryTask(MortarSqoopTask):
     Runs:
     mortar local:sqoop_query dbtype database-name query path 
 
-    sql_query must be implemented with the query that is going to be run
+    sql_query must be return the query to be run
     Example:
     def sql_query(self):
         return 'select user_id, name from user'
@@ -144,8 +151,8 @@ class MortarSqoopIncrementalTask(MortarSqoopTask):
 
     Required Parameters:
         path = s3n path to where data will be stored
-        table = table you are extracting from
-        column = column of table you are comparing against
+        table = table to extract from
+        column = column of table to compare against
         value = minimum threshold of column
     """
     table = luigi.Parameter()
@@ -166,7 +173,7 @@ class MortarSqoopTableTask(MortarSqoopTask):
 
     Required Parameter:
         path = s3n path to where data will be stored
-        table = table you are extracting from
+        table = table to extract from
     """
     table = luigi.Parameter()
 

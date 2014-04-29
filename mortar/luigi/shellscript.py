@@ -1,10 +1,7 @@
 import luigi
-import os
-import abc 
-import sys
+import abc
 import subprocess 
 import logging
-from luigi import LocalTarget
 from mortar.luigi import target_factory
 
 logger = logging.getLogger('luigi-interface')
@@ -23,8 +20,8 @@ class ShellScriptTask(luigi.Task):
     @abc.abstractmethod
     def subprocess_commands(self):
         """
-        Shell commands that will be ran in a subprocess
-        Should return a string where each line of script is seperated with ';'
+        Shell commands that will be run in a subprocess
+        Should return a string where each line of script is separated with ';'
         Example:
             cd my/dir; ls;
         """
