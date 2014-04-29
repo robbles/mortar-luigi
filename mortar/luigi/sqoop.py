@@ -78,14 +78,13 @@ class MortarSqoopTask(S3PathTask):
     def _append_array_if_item_exists(self, array, item, values):
         if item:
             for v in values:
-                array.append(v) 
+                array.append(v)
 
 
     def run(self):
         working_dir = os.getcwd()
         try:
             os.chdir(os.pardir)
-            os.chdir(os.getcwd())
 
             params = self.parameters()
 
