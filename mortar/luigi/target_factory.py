@@ -19,21 +19,39 @@ from luigi import LocalTarget
 
 def get_target(path):
     """
-    Factory method for creating a target from a path.
+    Factory method to create a Luigi Target from a path string.
+
+    Supports the following Target types:
+
+    * S3Target: s3://my-bucket/my-path
+    * LocalTarget: /path/to/file or file:///path/to/file
+
+    :type path: str
+    :param path: s3 or file URL, or local path
+
+    :rtype: Target:
+    :returns: Target for path string
     """
     if path.startswith('s3:'):
         return S3Target(path)
     elif path.startswith('/'):
         return LocalTarget(path)
-        
-    elif path.startswith('file:'):
-        return FileSystemTarget(path)
+    elif path.startswith('file://'):
+        # remove the file portion
+        actual_path = path[7:]
+        return LocalTarget(actual_path)
     else:
         raise RuntimeError("Unknown scheme for path: %s" % path)
 
 def write_file(out_target, text=None):
     """
-    Factory method for writing to a target.
+    Factory method to write a token file to a Luigi Target.
+
+    :type out_target: Target
+    :param out_target: Target where token file should be written
+
+    :type text: str
+    :param text: Optional text to write to token file. Default: write current UTC time.
     """
     with out_target.open('w') as token_file:
         if text:

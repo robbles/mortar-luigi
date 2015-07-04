@@ -29,14 +29,29 @@ logger = logging.getLogger('luigi-interface')
 
 class DynamoDBClient(object):
     """
-    A limited client for interacting with DynamoDB.
+    A boto-based client for interacting with DynamoDB from Luigi.
+
+    seealso:: https://help.mortardata.com/technologies/luigi/dynamodb_tasks
     """
 
-    # polling time and timeout for table creation and ramp-up
+    # interval to wait between polls to DynamoDB API in seconds
     TABLE_OPERATION_RESULTS_POLLING_SECONDS = 5.0
+
+    # timeout for DynamoDB table creation and ramp-up in seconds
     TABLE_OPERATION_RESULTS_TIMEOUT_SECONDS = 60.0 * 30.0
 
     def __init__(self, region='us-east-1', aws_access_key_id=None, aws_secret_access_key=None):
+        """
+
+        :type region: str
+        :param region: AWS region where your DynamoDB instance is located. Default: us-east-1.
+
+        :type aws_access_key_id: str
+        :param aws_access_key_id: AWS Access Key ID. If not provided, will be looked up from luigi configuration in dynamodb.aws_access_key_id.
+
+        :type aws_secret_access_key: str
+        :param aws_secret_access_key: AWS Secret Access Key. If not provided, will be looked up from luigi configuration in dynamodb.aws_secret_access_key.
+        """
         if not aws_access_key_id:
             aws_access_key_id = luigi.configuration.get_config().get('dynamodb', 'aws_access_key_id')
         if not aws_secret_access_key:
@@ -49,7 +64,22 @@ class DynamoDBClient(object):
 
     def create_table(self, table_name, schema, throughput, indexes=None):
         """
-        Create a new dynamoDB table and block until it is ready to use.
+        Create a new DynamoDB table and block until it is ready to use.
+
+        :type table_name: str
+        :param table_name: Name for table
+
+        :type schema: list of boto.dynamodb2.fields.HashKey
+        :param schema: Table schema
+
+        :type throughput: dict with {'read': read_throughput, 'write': write_throughput}
+        :param throughput: Initial table throughput
+
+        :type indexes: list of boto.dynamodb2.fields.AllIndex
+        :param indexes: Initial indexes for the table. Default: no indexes.
+
+        :rtype: boto.dynamodb2.table.Table:
+        :returns: Newly created Table
         """
         table = Table.create(table_name,
             schema=schema,
@@ -63,10 +93,17 @@ class DynamoDBClient(object):
 
     def get_table(self, table_name):
         """
-        Fetch a table from DynamoDB.
+        Fetch a Table from DynamoDB.
 
         NOTE: this is a somewhat expensive operation,
-              which must query dynamo for the current state of the table
+        which must query dynamo for the current state
+        of the table.
+
+        :type table_name: str
+        :param table_name: Name of Table to load
+
+        :rtype: boto.dynamodb2.table.Table:
+        :returns: Requested Table
         """
         table = Table(table_name, connection=self.dynamo_cx)
 
@@ -77,8 +114,14 @@ class DynamoDBClient(object):
 
     def update_throughput(self, table_name, throughput):
         """
-        Update a table's throughput in the stepwise fashion required for DynamoDB,
-        polling until complete.
+        Update a table's throughput, using the stepwise
+        fashion of increasing throughput by 2X each iteration,
+        until the table has reached desired throughput.
+
+        note:: As of Oct 2014, stepwise update is no longer required for DynamoDB.
+
+        :rtype: boto.dynamodb2.table.Table:
+        :returns: Table with updated throughput
         """
         table = self.get_table(table_name)
 
@@ -118,33 +161,55 @@ class DynamoDBClient(object):
 
 class DynamoDBTask(luigi.Task):
     """
-    Class for tasks interacting with DynamoDB.
+    Superclass for Luigi Tasks interacting with DynamoDB.
+
+    seealso:: https://help.mortardata.com/technologies/luigi/dynamodb_tasks
     """
 
     @abc.abstractmethod
     def table_name(self):
         """
-        Name of the table.
+        Name of the table on which operation should be performed.
+
+        :rtype: str:
+        :returns: table_name for operation
         """
-        raise RuntimeError("Must provide a table_name")
+        raise RuntimeError("Please implement the table_name method")
 
     @abc.abstractmethod
     def output_token(self):
         """
-        Token to be written out on completion of the task.
+        Luigi Target providing path to a token that indicates
+        completion of this Task.
+
+        :rtype: Target:
+        :returns: Target for Task completion token
         """
-        raise RuntimeError("Must provide an output token")
+        raise RuntimeError("Please implement the output_token method")
 
     def output(self):
+        """
+        The output for this Task. Returns the output token
+        by default, so the task only runs if the token does not 
+        already exist.
+
+        :rtype: Target:
+        :returns: Target for Task completion token
+        """
         return self.output_token()
 
 
 class CreateDynamoDBTable(DynamoDBTask):
     """
-    Create new table in DynamoDB to serve recommendations.
-    This task will fail if the requested table name already exists.
-    Table creation in DynamoDB takes between several seconds and several minutes; this task will
-        block until creation has finished.
+    Luigi Task to create a new table in DynamoDB.
+
+    This Task writes an output token to the location designated
+    by the `output_token` method to indicate that the
+    table has been successfully create. The Task will fail 
+    if the requested table name already exists.
+
+    Table creation in DynamoDB takes between several seconds and several minutes; this Task will
+    block until creation has finished.
     """
 
     # Initial read throughput of created table
@@ -169,7 +234,7 @@ class CreateDynamoDBTable(DynamoDBTask):
     # [ {'name': sec_index, 'range_key': range_key_name, 'data_type': NUMBER} ]
     indexes = luigi.Parameter(None)
 
-    def generate_indexes(self):
+    def _generate_indexes(self):
         """
         Create boto-friendly index data structure.
         """
@@ -191,7 +256,7 @@ class CreateDynamoDBTable(DynamoDBTask):
         throughput={'read': self.read_throughput,
                     'write': self.write_throughput}
         if self.indexes:
-            dynamodb_client.create_table(self.table_name(), schema, throughput, indexes=self.generate_indexes())
+            dynamodb_client.create_table(self.table_name(), schema, throughput, indexes=self._generate_indexes())
         else:
             dynamodb_client.create_table(self.table_name(), schema, throughput)
 
@@ -201,8 +266,12 @@ class CreateDynamoDBTable(DynamoDBTask):
 
 class UpdateDynamoDBThroughput(DynamoDBTask):
     """
-    Update the throughput of an existing DynamoDB table.
-    Task will fail if table_name does not exist.
+    Luigi Task to update the throughput of an existing DynamoDB table.
+
+    This Task writes an output token to the location designated
+    by the `output_token` method to indicate that the
+    table has been successfully updated. This Task will fail if the 
+    table does not exist.
     """
 
     # Target read throughput
@@ -226,7 +295,12 @@ class UpdateDynamoDBThroughput(DynamoDBTask):
 
 class SanityTestDynamoDBTable(DynamoDBTask):
     """
-    General check that the contents of a DynamoDB table exist and contain sentinel ids.
+    Luigi Task to sanity check that that a set of sentinal IDs
+    exist in a DynamoDB table (usually after loading it with data).
+
+    This Task writes an output token to the location designated
+    by the `output_token` method to indicate that the
+    Task has been successfully completed.
     """
 
     # Name of the primary hash key for this table
@@ -248,7 +322,10 @@ class SanityTestDynamoDBTable(DynamoDBTask):
     @abc.abstractmethod
     def ids(self):
         """
-        Sentinel ids to check
+        List of sentinal IDs to sanity check.
+
+        :rtype: list of str:
+        :returns: list of IDs
         """
         return RuntimeError("Must provide list of ids to sanity test")
 
@@ -295,6 +372,6 @@ class SanityTestDynamoDBTable(DynamoDBTask):
 
 class DynamoDBTaskException(Exception):
     """
-    Exception thrown by DynamoDBTasks
+    Exception thrown by DynamoDBTask subclasses.
     """
     pass

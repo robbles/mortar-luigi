@@ -25,30 +25,61 @@ logger = logging.getLogger('luigi-interface')
 
 class MongoDBTask(luigi.Task):
     """
-    Class for tasks interacting with MongoDB.
+    Superclass for Luigi Tasks interacting with MongoDB.
+
+    seealso:: https://help.mortardata.com/technologies/luigi/mongodb_tasks
     """
 
     @abc.abstractmethod
     def collection_name(self):
         """
-        Name of the collection
+        Name of the MongoDB collection on which operation should be performed.
+
+        :rtype: str:
+        :returns: collection name for operation
         """
-        raise RuntimeError("Must provide a collection_name")
+        raise RuntimeError("Please implement the collection_name method")
 
     @abc.abstractmethod
     def output_token(self):
         """
-        Token to be written out on completion of the task.
+        Luigi Target providing path to a token that indicates
+        completion of this Task.
+
+        :rtype: Target:
+        :returns: Target for Task completion token
         """
-        raise RuntimeError("Must provide an output token")
+        raise RuntimeError("Please implement the output_token method")
 
     def output(self):
+        """
+        The output for this Task. Returns the output token
+        by default, so the task only runs if the token does not 
+        already exist.
+
+        :rtype: Target:
+        :returns: Target for Task completion token
+        """
         return self.output_token()
 
 
 class SanityTestMongoDBCollection(MongoDBTask):
     """
-    General check that the contents of a MongoDB collection exist and contain sentinel ids.
+    Luigi Task to sanity check that that a set of sentinal IDs
+    exist in a DynamoDB table (usually after loading it with data).
+
+    This Task writes an output token to the location designated
+    by the `output_token` method to indicate that the
+    Task has been successfully completed.
+
+    To use this class, define the following section in your Luigi 
+    configuration file:
+
+    ::[mongodb]
+    ::mongo_conn=my_mongo_uri
+    ::mongo_db=my_mongo_database
+
+    Also, ensure you have installed the pymongo module.
     """
 
     # number of entries required to be in the collection
@@ -66,7 +97,10 @@ class SanityTestMongoDBCollection(MongoDBTask):
     @abc.abstractmethod
     def ids(self):
         """
-        Sentinel ids to check
+        List of sentinal IDs to sanity check.
+
+        :rtype: list of str:
+        :returns: list of IDs
         """
         return RuntimeError("Must provide list of ids to sanity test")
 
@@ -121,6 +155,6 @@ class SanityTestMongoDBCollection(MongoDBTask):
 
 class MongoDBTaskException(Exception):
     """
-    Exception thrown by MongoDBTasks
+    Exception thrown by MongoDBTask subclasses.
     """
     pass

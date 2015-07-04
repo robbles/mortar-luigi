@@ -1,3 +1,17 @@
+# Copyright (c) 2014 Mortar Data
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not
+# use this file except in compliance with the License. You may obtain a copy of
+# the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations under
+# the License.
+
 import abc
 import luigi, os
 from luigi.s3 import S3PathTask
@@ -8,28 +22,33 @@ logger = logging.getLogger('luigi-interface')
 
 class MortarSqoopTask(S3PathTask):
     """
-    Base class for Mortar Sqoop commands
+    Base class for Mortar Sqoop commands. This functionality is EXPERIMENTAL.
+
     Mortar Sqoop is a local tool to extract data from a JDBC database to an S3 bucket
     See http://help.mortardata.com/integrations/sql_databases for more information on how
-    to use sqoop
+    to use sqoop.
+
 
     One required parameter:
         path - s3n path where results are stored
-    Additional requirements are database configuration
-    set in the client.cfg file.  
-    Example:
-    [database]
-    dbtype: ${example: postgres}
-    database: ${example: mydatabase}
-    host: ${example: localhost}
-    port: ${example: 1234}
-    username: ${example: myusername}
-    password: ${example: mypassword}
+
+    To use this class, define the following section in your Luigi 
+    client configuration file:
+
+    ::[database]
+    ::dbtype: ${example: postgres}
+    ::database: ${example: mydatabase}
+    ::host: ${example: localhost}
+    ::port: ${example: 1234}
+    ::username: ${example: myusername}
+    ::password: ${example: mypassword}
 
     Three optional parameters:
         jdbc_driver = Name of the JDBC driver class (example: COM.DRIVER.BAR)
         direct = Pass in True as a boolean to use native db tools instead of jdbc queries (rarely used)
         driver_jar = Path to the jar containing the jdbc driver (example: file://path/to/driver)
+
+    :warning EXPERIMENTAL
 
     """
 
@@ -41,7 +60,7 @@ class MortarSqoopTask(S3PathTask):
     
     def parameters(self):
         """
-        These values are required parameters
+        These values are required parameters.
         Set them in the client.cfg file
         """
         config = luigi.configuration.get_config()
@@ -120,7 +139,7 @@ class MortarSqoopTask(S3PathTask):
 
 class MortarSqoopQueryTask(MortarSqoopTask):
     """
-    Export the result of an SQL query to S3.
+    Export the result of an SQL query to S3. EXPERIMENTAL.
     Runs:
     mortar local:sqoop_query dbtype database-name query path 
 
@@ -131,6 +150,8 @@ class MortarSqoopQueryTask(MortarSqoopTask):
 
     Required Parameters:
         path = s3n path to where data will be stored
+
+    :warning EXPERIMENTAL
     """
 
     def command(self):
@@ -145,7 +166,8 @@ class MortarSqoopQueryTask(MortarSqoopTask):
 
 class MortarSqoopIncrementalTask(MortarSqoopTask):
     """
-    Export all records where column is > value
+    Export all records where column is > value. EXPERIMENTAL.
+
     Runs:
     mortar local:sqoop_incremental dbtype database-name table column value path 
 
@@ -154,6 +176,8 @@ class MortarSqoopIncrementalTask(MortarSqoopTask):
         table = table to extract from
         column = column of table to compare against
         value = minimum threshold of column
+
+    :warning EXPERIMENTAL
     """
     table = luigi.Parameter()
     column = luigi.Parameter()
@@ -167,13 +191,15 @@ class MortarSqoopIncrementalTask(MortarSqoopTask):
 
 class MortarSqoopTableTask(MortarSqoopTask):
     """
-    Export all data from an RDBMS table to S3.
+    Export all data from an RDBMS table to S3. EXPERIMENTAL.
     Runs:
     mortar local:sqoop_table dbtype database-name table path 
 
     Required Parameter:
         path = s3n path to where data will be stored
         table = table to extract from
+
+    :warning EXPERIMENTAL
     """
     table = luigi.Parameter()
 
